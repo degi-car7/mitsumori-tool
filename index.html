@@ -1,0 +1,2053 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>カーセブンデジフィールド 自動見積ツール</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+      background: #f4f6f9;
+      color: #2c3e50;
+      min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, #1a3a5c 0%, #2d6a9f 100%);
+      color: white;
+      padding: 20px 32px;
+    }
+    header .logo-text { font-size: 11px; opacity: .7; letter-spacing: 1px; text-transform: uppercase; }
+    header h1 { font-size: 22px; font-weight: 700; }
+    header h2 { font-size: 13px; font-weight: 400; opacity: .85; margin-top: 2px; }
+
+    .mode-bar {
+      background: white;
+      border-bottom: 1px solid #dde2ea;
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .mode-btn {
+      padding: 14px 28px;
+      border: none;
+      background: none;
+      font-size: 14px;
+      font-weight: 600;
+      color: #7a8899;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -1px;
+      transition: all .2s;
+    }
+    .mode-btn.active { color: #1a3a5c; border-bottom-color: #2d6a9f; }
+    .mode-btn:hover:not(.active) { color: #2d6a9f; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 370px;
+      gap: 24px;
+      padding: 24px 32px;
+      max-width: 1300px;
+      margin: 0 auto;
+    }
+
+    /* ─── Cards ─── */
+    .card {
+      background: white;
+      border-radius: 12px;
+      border: 1px solid #e0e6ef;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: #2d6a9f;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #eef0f4;
+    }
+
+    /* ─── Package cards ─── */
+    .pkg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .pkg-card {
+      border: 2px solid #e0e6ef;
+      border-radius: 10px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all .2s;
+      position: relative;
+    }
+    .pkg-card:hover { border-color: #2d6a9f; transform: translateY(-1px); }
+    .pkg-card.selected { border-color: #2d6a9f; background: #f0f7ff; }
+    .pkg-card input[type=radio] { position: absolute; opacity: 0; }
+    .pkg-name { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+    .pkg-price { font-size: 18px; font-weight: 800; color: #2d6a9f; }
+    .pkg-price span { font-size: 11px; font-weight: 400; color: #7a8899; }
+    .pkg-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .pkg-tag { font-size: 10px; background: #e9f3fc; color: #2d6a9f; padding: 2px 7px; border-radius: 20px; }
+    .pkg-tag.off { background: #f5f5f5; color: #aaa; text-decoration: line-through; }
+
+    /* ─── Mini pkg cards (per-store pkg mode) ─── */
+    .pkg-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .pkg-mini-card {
+      border: 2px solid #e0e6ef; border-radius: 8px;
+      padding: 9px 11px; cursor: pointer; transition: all .18s;
+    }
+    .pkg-mini-card:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+    .pkg-mini-name { font-size: 12px; font-weight: 700; margin-bottom: 1px; }
+    .pkg-mini-price { font-size: 13px; font-weight: 800; }
+    .pkg-mini-desc { font-size: 10px; color: #9ca3af; margin-top: 2px; line-height: 1.3; }
+
+    /* ─── Num ctrl ─── */
+    .field-group { display: flex; flex-direction: column; gap: 12px; }
+    .field-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .field-label { font-size: 13px; color: #374151; flex: 1; }
+    .field-sub { font-size: 11px; color: #9ca3af; margin-top: 1px; }
+    .num-ctrl { display: flex; align-items: center; border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden; }
+    .num-ctrl button {
+      width: 32px; height: 34px; border: none; background: #f9fafb;
+      font-size: 17px; cursor: pointer; color: #374151; transition: background .15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .num-ctrl button:hover { background: #e5e7eb; }
+    .num-ctrl input {
+      width: 50px; height: 34px; border: none;
+      border-left: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb;
+      text-align: center; font-size: 14px; font-weight: 700; outline: none;
+    }
+
+    /* ─── Media checks ─── */
+    .media-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+    .media-item {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; cursor: pointer;
+      padding: 5px 8px; border: 1px solid #e5e7eb; border-radius: 6px;
+      background: white; transition: all .15s;
+    }
+    .media-item:hover { border-color: #2d6a9f; background: #f0f7ff; }
+    .media-item input { accent-color: #2d6a9f; }
+    .media-monthly { font-size: 10px; color: #9ca3af; margin-left: auto; }
+
+    /* ─── Store cards (single mode) ─── */
+    .store-list { display: flex; flex-direction: column; gap: 14px; }
+    .store-card {
+      background: white;
+      border-radius: 12px;
+      border: 2px solid #e0e6ef;
+      overflow: hidden;
+      transition: border-color .2s;
+    }
+    .store-card:focus-within { border-color: #2d6a9f; }
+    .store-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e0e6ef;
+      cursor: pointer;
+    }
+    .store-num {
+      width: 28px; height: 28px;
+      background: #2d6a9f; color: white;
+      border-radius: 50%; font-size: 12px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .store-name-input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      font-weight: 600;
+      color: #1a3a5c;
+      outline: none;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    .store-name-input:hover { background: #e9f3fc; }
+    .store-name-input:focus { background: #dbeafe; }
+    .store-header .toggle-icon {
+      font-size: 12px; color: #9ca3af; transition: transform .2s;
+      user-select: none;
+    }
+    .store-header .toggle-icon.open { transform: rotate(180deg); }
+    .store-delete {
+      width: 26px; height: 26px;
+      border: 1px solid #e5e7eb; background: white; border-radius: 6px;
+      font-size: 14px; color: #9ca3af; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .15s; flex-shrink: 0;
+    }
+    .store-delete:hover { background: #fef2f2; border-color: #ef4444; color: #ef4444; }
+    .store-body { padding: 14px 16px; display: none; }
+    .store-body.open { display: block; }
+
+    /* System rows inside store */
+    .sys-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 9px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .sys-row:last-child { border-bottom: none; }
+    .sys-row > input[type=checkbox] {
+      width: 16px; height: 16px; margin-top: 2px;
+      flex-shrink: 0; cursor: pointer; accent-color: #2d6a9f;
+    }
+    .sys-info { flex: 1; }
+    .sys-name { font-size: 13px; font-weight: 600; color: #1f2937; }
+    .sys-hint { font-size: 10px; color: #9ca3af; margin-top: 1px; }
+    .sys-sub {
+      display: none; background: #f8fafc;
+      border-radius: 6px; padding: 10px 12px; margin-top: 8px;
+    }
+    .sys-sub.open { display: block; }
+    .sys-sub-row {
+      display: flex; align-items: center;
+      justify-content: space-between; gap: 8px;
+      padding: 4px 0; font-size: 12px; color: #4b5563;
+    }
+    .num-ctrl-sm { display: flex; align-items: center; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+    .num-ctrl-sm button {
+      width: 26px; height: 28px; border: none; background: #f9fafb;
+      font-size: 15px; cursor: pointer; color: #374151;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .num-ctrl-sm button:hover { background: #e5e7eb; }
+    .num-ctrl-sm input {
+      width: 42px; height: 28px; border: none;
+      border-left: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb;
+      text-align: center; font-size: 13px; font-weight: 700; outline: none;
+    }
+    .radio-row { display: flex; gap: 14px; margin-top: 4px; flex-wrap: wrap; }
+    .radio-row label { display: flex; align-items: center; gap: 5px; font-size: 11px; cursor: pointer; }
+
+    /* Add store button */
+    .btn-add-store {
+      width: 100%;
+      padding: 13px;
+      border: 2px dashed #c7d2e0;
+      background: white;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #6b7280;
+      cursor: pointer;
+      transition: all .2s;
+      margin-top: 8px;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .btn-add-store:hover { border-color: #2d6a9f; color: #2d6a9f; background: #f0f7ff; }
+    .btn-add-inline {
+      padding: 7px 16px;
+      background: #2d6a9f; color: white; border: none;
+      border-radius: 8px; font-size: 13px; font-weight: 700;
+      cursor: pointer; transition: background .2s; white-space: nowrap;
+    }
+    .btn-add-inline:hover { background: #1a3a5c; }
+    .store-count-badge {
+      font-size: 13px; font-weight: 700;
+      background: #e9f3fc; color: #2d6a9f;
+      padding: 5px 14px; border-radius: 20px;
+    }
+    .store-summary-row {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      padding: 10px 16px; background: #f8fafc;
+      border-top: 1px solid #e0e6ef; font-size: 12px; color: #6b7280;
+    }
+    .store-summary-chip {
+      background: white; border: 1px solid #e0e6ef;
+      border-radius: 20px; padding: 3px 10px; font-size: 11px; color: #4b5563;
+    }
+    .store-summary-chip.active { background: #e9f3fc; border-color: #2d6a9f; color: #1a3a5c; font-weight: 600; }
+
+    /* ─── Quote panel ─── */
+    .quote-panel { position: sticky; top: 24px; height: fit-content; }
+    .quote-card { background: white; border-radius: 12px; border: 1px solid #e0e6ef; overflow: hidden; }
+    .quote-header { background: linear-gradient(135deg, #1a3a5c, #2d6a9f); color: white; padding: 16px 20px; }
+    .quote-header h3 { font-size: 13px; opacity: .85; margin-bottom: 2px; }
+    .quote-total { font-size: 26px; font-weight: 800; }
+    .quote-body { padding: 16px 20px; max-height: calc(100vh - 280px); overflow-y: auto; }
+    .q-section { margin-bottom: 16px; }
+    .q-section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .5px; color: #9ca3af; margin-bottom: 8px;
+    }
+    .q-store-label {
+      font-size: 12px; font-weight: 700; color: #374151;
+      padding: 6px 0 4px; border-bottom: 1px solid #e5e7eb; margin-bottom: 4px;
+    }
+    .q-line {
+      display: flex; justify-content: space-between; align-items: baseline;
+      gap: 6px; padding: 4px 0; font-size: 12px;
+      border-bottom: 1px solid #f9fafb;
+    }
+    .q-line:last-child { border-bottom: none; }
+    .q-line-name { color: #4b5563; flex: 1; }
+    .q-line-amt { font-weight: 600; color: #1a3a5c; white-space: nowrap; }
+    .q-line-free { font-size: 11px; color: #16a34a; font-weight: 600; }
+    .q-subtotal {
+      display: flex; justify-content: space-between;
+      padding: 8px 0; border-top: 2px solid #e0e6ef; margin-top: 4px;
+      font-weight: 700; font-size: 13px;
+    }
+    .q-subtotal .amt { color: #2d6a9f; font-size: 15px; }
+    .q-annual {
+      background: #f0f7ff; border-radius: 8px; padding: 10px 12px; margin-top: 10px;
+    }
+    .q-annual .label { font-size: 11px; color: #6b7280; margin-bottom: 2px; }
+    .q-annual .val { font-size: 17px; font-weight: 800; color: #1a3a5c; }
+    .q-annual .sub { font-size: 10px; color: #9ca3af; }
+    .empty-msg { text-align: center; color: #9ca3af; font-size: 13px; padding: 28px 0; }
+    .note-box {
+      background: #fef9ec; border: 1px solid #f5d57a; border-radius: 8px;
+      padding: 10px 12px; font-size: 11px; color: #856404; margin-top: 12px;
+      line-height: 1.6;
+    }
+    .btn-print {
+      width: 100%; margin-top: 12px; padding: 11px;
+      background: #2d6a9f; color: white; border: none; border-radius: 8px;
+      font-size: 13px; font-weight: 700; cursor: pointer; transition: background .2s;
+    }
+    .btn-print:hover { background: #1a3a5c; }
+    .btn-download {
+      width: 100%; margin-top: 8px; padding: 11px;
+      background: #16a34a; color: white; border: none; border-radius: 8px;
+      font-size: 13px; font-weight: 700; cursor: pointer; transition: background .2s;
+    }
+    .btn-download:hover { background: #14532d; }
+    /* ─── Download modal ─── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.55); z-index: 9999;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: white; border-radius: 14px; padding: 30px 32px;
+      width: 420px; max-width: 95vw;
+      box-shadow: 0 24px 64px rgba(0,0,0,.28);
+    }
+    .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 20px; color: #1a3a5c; }
+    .modal-field { margin-bottom: 14px; }
+    .modal-label { font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 5px; display: block; }
+    .modal-input {
+      width: 100%; padding: 9px 11px; border: 1px solid #d1d5db; border-radius: 7px;
+      font-size: 13px; font-family: inherit; outline: none; transition: border-color .15s;
+    }
+    .modal-input:focus { border-color: #2d6a9f; box-shadow: 0 0 0 3px rgba(45,106,159,.12); }
+    .modal-actions { display: flex; gap: 8px; margin-top: 22px; }
+    .modal-btn { flex: 1; padding: 10px; border-radius: 7px; font-size: 13px; cursor: pointer; font-weight: 600; }
+    .modal-btn-cancel { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+    .modal-btn-ok { flex: 1.6; background: #2d6a9f; color: white; border: none; }
+    .modal-btn-ok:hover { background: #1a3a5c; }
+    @media print {
+      .mode-bar, .btn-print, .btn-add-store, .store-delete { display: none !important; }
+      .layout { grid-template-columns: 1fr; padding: 0; }
+      .config-col { display: none; }
+      .quote-panel { position: static; }
+      .quote-body { max-height: none; }
+    }
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .quote-panel { position: static; }
+      .pkg-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo-text">CARSEVEN DIGIFIELD</div>
+  <h1>自動見積ツール</h1>
+  <h2>SaaSプロダクト &mdash; 料金シミュレーター</h2>
+</header>
+
+<div class="mode-bar">
+  <button class="mode-btn active" id="btnPkg"    onclick="setMode('pkg')">📦 パッケージ</button>
+  <button class="mode-btn"        id="btnSingle" onclick="setMode('single')">🔧 単品・店舗別カスタム</button>
+</div>
+
+<div class="layout">
+  <div class="config-col">
+
+    <!-- ═══════════ PACKAGE MODE ═══════════ -->
+    <div id="modePkg">
+      <!-- 店舗管理ヘッダー -->
+      <div style="background:white;border-radius:12px;border:1px solid #e0e6ef;margin-bottom:16px;overflow:hidden">
+        <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:#1a3a5c">📦 店舗別パッケージ設定</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:3px">各店舗ごとに「📦 パッケージ」または「🔧 カスタム」を選択できます。パッケージ店舗は初期費用無料（ID超過分除く）、カスタム店舗は単品と同じ料金体系です。</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+            <div class="store-count-badge" id="pkgStoreSummaryBadge">1店舗</div>
+            <button class="btn-add-inline" onclick="addPkgStore()">＋ 店舗を追加</button>
+          </div>
+        </div>
+        <div class="store-summary-row" id="pkgStoreSummaryChips"></div>
+      </div>
+
+      <div class="store-list" id="pkgStoreList"></div>
+
+      <button class="btn-add-store" onclick="addPkgStore()">
+        <span style="font-size:18px">＋</span> 店舗を追加する
+      </button>
+    </div><!-- /modePkg -->
+
+    <!-- ═══════════ SINGLE MODE ═══════════ -->
+    <div id="modeSingle" style="display:none">
+
+      <!-- 店舗管理ヘッダー -->
+      <div style="background:white;border-radius:12px;border:1px solid #e0e6ef;margin-bottom:16px;overflow:hidden">
+        <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:#1a3a5c">🏪 店舗別システム設定</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:3px">各店舗ごとにシステムを選択できます。法人共通費用は自動で1回のみ計上されます。</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+            <div class="store-count-badge" id="storeSummaryBadge">1店舗</div>
+            <button class="btn-add-inline" onclick="addStore()">＋ 店舗を追加</button>
+          </div>
+        </div>
+        <div class="store-summary-row" id="storeSummaryChips"></div>
+      </div>
+
+      <!-- アカウント発行費 設定パネル -->
+      <div id="accountFeePanel" style="background:white;border-radius:12px;border:1px solid #e0e6ef;margin-bottom:16px;padding:14px 20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#1a3a5c">👤 アカウント数</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:2px" id="accountFeeHint">システムを利用するユーザー数（アカウント発行費 ¥5,000/ID）</div>
+          </div>
+          <div id="accountFeeCtrl" class="num-ctrl">
+            <button onclick="adjSingleAccount(-1)">−</button>
+            <input type="number" id="singleAccountInput" value="1" min="1" max="99"
+              oninput="setSingleAccountCount(this.value)">
+            <button onclick="adjSingleAccount(1)">＋</button>
+          </div>
+          <div id="accountFeeAuto" style="display:none;font-size:12px;color:#6b7280;background:#f3f4f6;padding:5px 12px;border-radius:6px">
+            インスマートシステムのID数から自動計算されます
+          </div>
+        </div>
+      </div>
+
+      <div class="store-list" id="storeList"></div>
+
+      <button class="btn-add-store" onclick="addStore()">
+        <span style="font-size:18px">＋</span> 店舗を追加する
+      </button>
+    </div><!-- /modeSingle -->
+
+  </div><!-- /config-col -->
+
+  <!-- ─── Quote Panel ─── -->
+  <div class="quote-panel">
+    <div class="quote-card">
+      <div class="quote-header">
+        <h3>見積サマリー（税抜）</h3>
+        <div class="quote-total" id="qTotal">¥ −</div>
+      </div>
+      <div class="quote-body" id="qBody">
+        <div class="empty-msg">左のパネルで条件を設定してください</div>
+      </div>
+    </div>
+    <button class="btn-print" onclick="window.print()">🖨 印刷する</button>
+    <button class="btn-download" onclick="showDownloadModal()">📄 御見積書PDFを作成</button>
+    <div class="note-box">
+      ※ 価格はすべて税抜きです。<br>
+      ※ 従量課金（プロプライシング・抵当調査等）は含みません。<br>
+      ※ 媒体連携は各媒体との個別契約が別途必要です。<br>
+      ※ 見積はあくまで参考値です。詳細はご担当営業にご確認ください。
+    </div>
+  </div>
+</div>
+
+<!-- ─── Download modal ─── -->
+<div class="modal-overlay" id="dlModal" onclick="if(event.target===this)closeDownloadModal()">
+  <div class="modal-box">
+    <div class="modal-title">📄 御見積書を作成</div>
+    <div class="modal-field">
+      <label class="modal-label">お客様の会社名 <span style="color:#9ca3af;font-weight:400">（省略可）</span></label>
+      <input class="modal-input" id="dlCompany" type="text" placeholder="株式会社〇〇"
+        onkeydown="if(event.key==='Enter')document.getElementById('dlPerson').focus()">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">担当者名 <span style="color:#9ca3af;font-weight:400">（省略可）</span></label>
+      <input class="modal-input" id="dlPerson" type="text" placeholder="田川"
+        onkeydown="if(event.key==='Enter')execDownload()">
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-cancel" onclick="closeDownloadModal()">キャンセル</button>
+      <button class="modal-btn modal-btn-ok" onclick="execDownload()">📄 見積書を開く</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  PRICING DATA
+// ══════════════════════════════════════════
+const PACKAGES = {
+  '買取強化': {
+    monthly: 25000, color: '#2d6a9f', desc: '査定・買取契約・振込まで',
+    inc: { e_answer:true, insmart:true, smart_sign_buy:true, smart_sign_sell:false,
+           store_perf:true, media:false, core:false, e_kessai:true }
+  },
+  '販売ライト': {
+    monthly: 25000, color: '#16a34a', desc: '在庫掲載・媒体連携を効率化',
+    inc: { e_answer:true, insmart:true, smart_sign_buy:false, smart_sign_sell:false,
+           store_perf:false, media:true, core:false, e_kessai:false }
+  },
+  '販売強化': {
+    monthly: 50000, color: '#d97706', desc: '販売契約・在庫・媒体連携',
+    inc: { e_answer:true, insmart:true, smart_sign_buy:false, smart_sign_sell:true,
+           store_perf:true, media:true, core:false, e_kessai:false }
+  },
+  'DX': {
+    monthly: 100000, color: '#7c3aed', desc: '全システム連携・完全DX',
+    inc: { e_answer:true, insmart:true, smart_sign_buy:true, smart_sign_sell:true,
+           store_perf:true, media:true, core:true, e_kessai:true }
+  }
+};
+const PKG_LABELS = {
+  e_answer:'e-アンサー', insmart:'インスマート', smart_sign_buy:'買取スマートサイン',
+  smart_sign_sell:'販売スマートサイン', store_perf:'ストアパフォーマンス',
+  media:'媒体連携', core:'coreシステム', e_kessai:'e-決済'
+};
+
+// Per-store systems (used in single mode)
+const SYS = [
+  { key:'e_answer',       name:'e-アンサー',              hint:'初期¥5,000/店舗・月額¥10,000/店舗', hasIDs:false },
+  { key:'insmart',        name:'インスマートシステム',      hint:'初期¥5,000/ID（1ID目無料）・月額¥3,000/ID', hasIDs:true, idDefault:3, idLabel:'ID数' },
+  { key:'core',           name:'coreシステム',             hint:'初期¥50,000〜100,000/店舗・月額¥30,000〜50,000/店舗', hasIDs:true, idDefault:2, idLabel:'ID数', hasType:true },
+  { key:'smart_sign_buy', name:'買取スマートサイン',        hint:'初期¥5,000/法人（1回）・月額¥15,000/店舗', hasIDs:false },
+  { key:'smart_sign_sell',name:'販売スマートサイン',        hint:'初期¥5,000/法人（1回）・月額¥15,000/店舗', hasIDs:false },
+  { key:'e_kessai',       name:'e-決済（振込システム）',   hint:'初期¥5,000/法人（1回）・月額¥5,000/店舗', hasIDs:false },
+  { key:'store_perf',     name:'ストアパフォーマンス',      hint:'初期¥5,000/法人（1回）・月額¥10,000/店舗', hasIDs:false },
+  { key:'media',          name:'媒体連携',                 hint:'月額¥2,000〜¥10,000/店舗（媒体ごと）', hasIDs:false, isMedia:true }
+];
+const MEDIA_LIST = [
+  { key:'cs',   name:'カーセンサー', monthly:10000 },
+  { key:'goo',  name:'Goo',          monthly:10000 },
+  { key:'as',   name:'オートサーバー', monthly:2000 },
+  { key:'onet', name:'オークネット', monthly:2000 }
+];
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let mode = 'pkg';
+let selectedPkg = null;
+let storeIdCounter = 1;
+let pkgStoreIdCounter = 1;
+let lastQuoteData = null;   // populated by renderQuotePkg / renderQuoteSingle
+let singleAccountCount = 1; // アカウント数（インスマート未使用時に手動入力）
+let pkgViewMode = 'consolidated'; // 'consolidated' | 'perstore'
+
+function makePkgStore(num) {
+  return {
+    id: pkgStoreIdCounter++,
+    name: `店舗${num}`,
+    open: true,
+    storeMultiplier: 1,  // ×N店舗 倍数
+    type: 'pkg',         // 'pkg' | 'custom'
+    // ── Package fields ──
+    pkg: null,
+    insmart_ids: 5,
+    account_ids: 5,   // アカウント発行費用の対象（全システム共通）
+    core_ids: 3,
+    core_type: 'media',
+    addon_core: false,
+    addon_core_ids: 2,
+    addon_core_type: 'media',
+    addon_smart_sign_sell: false,
+    addon_smart_sign_buy: false,
+    addon_e_kessai: false,
+    addon_store_perf: false,
+    addon_e_answer: false,
+    media: { cs:false, goo:false, as:false, onet:false },
+    // ── Custom fields ──
+    c_e_answer: false,
+    c_insmart: false, c_insmart_ids: 3,
+    c_account_ids: 1,
+    c_core: false, c_core_ids: 2, c_core_type: 'media',
+    c_smart_sign_buy: false,
+    c_smart_sign_sell: false,
+    c_e_kessai: false,
+    c_store_perf: false,
+    c_media: { cs:false, goo:false, as:false, onet:false }
+  };
+}
+
+let pkgStores = [makePkgStore(1)];
+
+function makeStore(num) {
+  return {
+    id: storeIdCounter++,
+    name: `店舗${num}`,
+    open: true,
+    storeMultiplier: 1,   // 同じ設定の店舗数（×N店舗）
+    // systems
+    e_answer: false,
+    insmart: false, insmart_ids: 3,
+    core: false, core_ids: 2, core_type: 'media',
+    smart_sign_buy: false,
+    smart_sign_sell: false,
+    e_kessai: false,
+    store_perf: false,
+    media: { cs:false, goo:false, as:false, onet:false }
+  };
+}
+
+let stores = [makeStore(1)];
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+window.onload = () => {
+  renderPkgStores();
+  renderStores();
+};
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('modePkg').style.display    = m==='pkg'    ? '' : 'none';
+  document.getElementById('modeSingle').style.display = m==='single' ? '' : 'none';
+  document.getElementById('btnPkg').classList.toggle('active', m==='pkg');
+  document.getElementById('btnSingle').classList.toggle('active', m==='single');
+  calc();
+}
+
+// ══════════════════════════════════════════
+//  PACKAGE MODE – STORE RENDERING
+// ══════════════════════════════════════════
+const SYS_MON_MAP = {
+  e_answer:10000, smart_sign_buy:15000, smart_sign_sell:15000,
+  e_kessai:5000, store_perf:10000
+};
+
+function renderPkgStores() {
+  const list = document.getElementById('pkgStoreList');
+  list.innerHTML = pkgStores.map((ps, idx) => renderPkgStoreCard(ps, idx)).join('');
+  document.getElementById('pkgStoreSummaryBadge').textContent = `${pkgStores.length}店舗`;
+
+  const chips = document.getElementById('pkgStoreSummaryChips');
+  if (chips) {
+    const html = pkgStores.map((ps, idx) => {
+      const isDone = ps.type === 'pkg' ? !!ps.pkg : hasCustomSys(ps);
+      const typeTag = ps.type === 'custom' ? ' 🔧' : '';
+      return `<span class="store-summary-chip ${isDone ? 'active' : ''}"
+        onclick="scrollToPkgStore(${ps.id})" style="cursor:pointer">
+        ${idx+1}. ${ps.name}${typeTag}${isDone ? ' ✓' : ''}
+      </span>`;
+    }).join('');
+    chips.innerHTML = `<span style="font-weight:600;color:#374151;margin-right:4px">店舗一覧：</span>${html}
+      <span style="margin-left:auto;color:#9ca3af;font-size:11px">✓ = 設定済み</span>`;
+  }
+}
+
+function scrollToPkgStore(id) {
+  const el = document.getElementById(`pkgStoreCard${id}`);
+  if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+  const ps = pkgStores.find(s => s.id === id);
+  if (ps && !ps.open) { ps.open = true; renderPkgStores(); }
+}
+
+function renderPkgStoreCard(ps, idx) {
+  const bodyOpen = ps.open ? 'open' : '';
+
+  // ── Type toggle ──
+  const typeToggle = `
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      <button onclick="event.stopPropagation();setPkgStoreType(${ps.id},'pkg')"
+        style="flex:1;padding:7px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;
+               border:2px solid ${ps.type==='pkg'?'#2d6a9f':'#e0e6ef'};
+               background:${ps.type==='pkg'?'#e9f3fc':'white'};
+               color:${ps.type==='pkg'?'#1a3a5c':'#6b7280'}">
+        📦 パッケージ
+      </button>
+      <button onclick="event.stopPropagation();setPkgStoreType(${ps.id},'custom')"
+        style="flex:1;padding:7px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;
+               border:2px solid ${ps.type==='custom'?'#7c3aed':'#e0e6ef'};
+               background:${ps.type==='custom'?'#f5f3ff':'white'};
+               color:${ps.type==='custom'?'#5b21b6':'#6b7280'}">
+        🔧 カスタム
+      </button>
+    </div>`;
+
+  let bodyContent = typeToggle;
+
+  if (ps.type === 'pkg') {
+    // Mini package grid
+    const pkgCards = Object.entries(PACKAGES).map(([name, p]) => {
+      const sel = ps.pkg === name;
+      const selStyle = sel ? `border-color:${p.color};background:#f0f7ff;` : '';
+      return `<div class="pkg-mini-card" onclick="selectPkgForStore(${ps.id},'${name}')"
+        style="${selStyle}">
+        <div class="pkg-mini-name" style="color:${p.color}">${name}</div>
+        <div class="pkg-mini-price" style="color:${p.color}">¥${p.monthly.toLocaleString()}<span style="font-size:10px;font-weight:400;color:#9ca3af">/月</span></div>
+        <div class="pkg-mini-desc">${p.desc}</div>
+      </div>`;
+    }).join('');
+
+    bodyContent += `<div style="margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:#6b7280;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">パッケージ選択</div>
+      <div class="pkg-mini-grid">${pkgCards}</div>
+    </div>`;
+    bodyContent += ps.pkg ? buildPkgStoreAddons(ps, PACKAGES[ps.pkg]) : '';
+  } else {
+    bodyContent += buildCustomStoreBody(ps);
+  }
+
+  // ── Header badge ──
+  let pkgBadge;
+  if (ps.type === 'pkg') {
+    pkgBadge = ps.pkg
+      ? `<span style="font-size:11px;background:${PACKAGES[ps.pkg].color};color:white;padding:2px 9px;border-radius:12px;font-weight:600">${ps.pkg}</span>`
+      : `<span style="font-size:11px;color:#9ca3af;background:#f3f4f6;padding:2px 9px;border-radius:12px">📦 未選択</span>`;
+  } else {
+    pkgBadge = hasCustomSys(ps)
+      ? `<span style="font-size:11px;background:#7c3aed;color:white;padding:2px 9px;border-radius:12px;font-weight:600">🔧 カスタム</span>`
+      : `<span style="font-size:11px;color:#9ca3af;background:#f3f4f6;padding:2px 9px;border-radius:12px">🔧 未設定</span>`;
+  }
+
+  return `<div class="store-card" id="pkgStoreCard${ps.id}">
+    <div class="store-header" onclick="togglePkgStore(${ps.id})">
+      <div class="store-num">${idx+1}</div>
+      <input class="store-name-input" value="${ps.name}" onclick="event.stopPropagation()"
+        oninput="setPkgStoreField(${ps.id},'name',this.value)">
+      ${pkgBadge}
+      <div onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;margin-left:4px">
+        <span style="font-size:11px;color:#64748b;white-space:nowrap">×</span>
+        <input type="number" min="1" max="99" value="${ps.storeMultiplier||1}"
+          oninput="setPkgStoreField(${ps.id},'storeMultiplier',Math.max(1,parseInt(this.value)||1));calcPackage()"
+          style="width:36px;border:none;background:transparent;font-size:13px;font-weight:700;color:#1e3a5f;text-align:center;outline:none;padding:0">
+        <span style="font-size:11px;color:#64748b;white-space:nowrap">店舗</span>
+      </div>
+      <button class="store-delete" onclick="event.stopPropagation();copyPkgStore(${ps.id})" title="コピー">⧉</button>
+      <button class="store-delete" onclick="event.stopPropagation();removePkgStore(${ps.id})" title="削除">✕</button>
+      <span class="toggle-icon ${bodyOpen}">▼</span>
+    </div>
+    <div class="store-body ${bodyOpen}">
+      ${bodyContent}
+    </div>
+  </div>`;
+}
+
+function buildPkgStoreAddons(ps, pkg) {
+  let html = '';
+
+  // ID settings
+  html += `<div style="margin-bottom:10px;padding:10px 12px;background:#f8fafc;border-radius:8px;border:1px solid #e5e7eb">
+    <div style="font-size:11px;font-weight:700;color:#6b7280;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">ID設定</div>
+    <div class="field-row">
+      <div class="field-label">インスマートシステム ID数
+        <div class="field-sub">月額¥3,000/ID</div>
+      </div>
+      <div class="num-ctrl-sm">
+        <button onclick="adjPkgStore(${ps.id},'insmart_ids',-1)">−</button>
+        <input type="number" value="${ps.insmart_ids}" min="1" max="99"
+          oninput="setPkgStoreField(${ps.id},'insmart_ids',+this.value)">
+        <button onclick="adjPkgStore(${ps.id},'insmart_ids',1)">＋</button>
+      </div>
+    </div>
+    <div class="field-row" style="margin-top:8px">
+      <div class="field-label">👤 アカウント数（全システム共通）
+        <div class="field-sub">5IDまで無料。6ID目以降は初期¥5,000/ID</div>
+      </div>
+      <div class="num-ctrl-sm">
+        <button onclick="adjPkgStore(${ps.id},'account_ids',-1)">−</button>
+        <input type="number" value="${ps.account_ids}" min="1" max="99"
+          oninput="setPkgStoreField(${ps.id},'account_ids',+this.value)">
+        <button onclick="adjPkgStore(${ps.id},'account_ids',1)">＋</button>
+      </div>
+    </div>`;
+
+  if (ps.pkg === 'DX') {
+    html += `
+    <div class="field-row" style="margin-top:8px">
+      <div class="field-label">coreシステム ID数
+        <div class="field-sub">5IDまで無料。6ID目以降は月額¥2,000/ID</div>
+      </div>
+      <div class="num-ctrl-sm">
+        <button onclick="adjPkgStore(${ps.id},'core_ids',-1)">−</button>
+        <input type="number" value="${ps.core_ids}" min="1" max="99"
+          oninput="setPkgStoreField(${ps.id},'core_ids',+this.value)">
+        <button onclick="adjPkgStore(${ps.id},'core_ids',1)">＋</button>
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+
+  // Addon systems not in package
+  const addonSystems = SYS.filter(s => !pkg.inc[s.key] && s.key !== 'insmart');
+  if (addonSystems.length > 0) {
+    html += `<div style="padding:10px 12px;background:#f8fafc;border-radius:8px;border:1px solid #e5e7eb">
+      <div style="font-size:11px;font-weight:700;color:#6b7280;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">オプション追加</div>`;
+
+    if (pkg.inc.media) {
+      html += `<div style="font-size:11px;color:#16a34a;margin-bottom:6px">✅ 媒体連携（全媒体）はパッケージに含まれています</div>`;
+    }
+
+    addonSystems.forEach(s => {
+      if (s.isMedia) {
+        html += `<div style="margin-bottom:8px">
+          <div style="font-size:12px;font-weight:600;margin-bottom:4px;color:#374151">📡 媒体連携（オプション）</div>
+          <div class="media-grid">${MEDIA_LIST.map(m => {
+            const chkd = ps.media[m.key] ? 'checked' : '';
+            return `<label class="media-item">
+              <input type="checkbox" ${chkd} onchange="setPkgStoreMedia(${ps.id},'${m.key}',this.checked)">
+              ${m.name}<span class="media-monthly">¥${m.monthly.toLocaleString()}/月</span>
+            </label>`;
+          }).join('')}</div>
+        </div>`;
+      } else if (s.key === 'core') {
+        const chkd = ps.addon_core ? 'checked' : '';
+        const optDisp = ps.addon_core ? '' : 'none';
+        html += `<div style="margin-bottom:8px;padding:8px 10px;background:white;border-radius:6px;border:1px solid #e5e7eb">
+          <label class="media-item" style="width:auto;display:inline-flex;font-weight:600">
+            <input type="checkbox" ${chkd} onchange="setPkgStoreAddon(${ps.id},'core',this.checked)">
+            🔧 coreシステムを追加
+            <span class="media-monthly" style="margin-left:6px">初期無料・月額¥30,000〜50,000</span>
+          </label>
+          <div id="pkgAddCoreOpt_${ps.id}" style="display:${optDisp};margin-top:8px;padding-left:4px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+              <span style="font-size:12px;color:#374151">ID数</span>
+              <div class="num-ctrl-sm">
+                <button onclick="adjPkgStore(${ps.id},'addon_core_ids',-1)">−</button>
+                <input type="number" value="${ps.addon_core_ids}" min="1"
+                  oninput="setPkgStoreField(${ps.id},'addon_core_ids',+this.value)">
+                <button onclick="adjPkgStore(${ps.id},'addon_core_ids',1)">＋</button>
+              </div>
+            </div>
+            <div class="radio-row">
+              <label><input type="radio" name="coreAddType_${ps.id}" value="media" ${ps.addon_core_type==='media'?'checked':''}
+                onchange="setPkgStoreField(${ps.id},'addon_core_type','media')">媒体取り込み（月額¥50,000）</label>
+              <label><input type="radio" name="coreAddType_${ps.id}" value="nomedia" ${ps.addon_core_type==='nomedia'?'checked':''}
+                onchange="setPkgStoreField(${ps.id},'addon_core_type','nomedia')">取り込み無し（月額¥30,000）</label>
+            </div>
+          </div>
+        </div>`;
+      } else {
+        const addonKey = `addon_${s.key}`;
+        const chkd = ps[addonKey] ? 'checked' : '';
+        const mon = SYS_MON_MAP[s.key] || 0;
+        html += `<div style="margin-bottom:4px">
+          <label class="media-item" style="width:auto;display:inline-flex">
+            <input type="checkbox" ${chkd} onchange="setPkgStoreAddon(${ps.id},'${s.key}',this.checked)">
+            ${s.name}を追加
+            <span class="media-monthly" style="margin-left:6px">月額¥${mon.toLocaleString()}</span>
+          </label>
+        </div>`;
+      }
+    });
+    html += '</div>';
+  }
+
+  return html;
+}
+
+function selectPkgForStore(id, name) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  ps.pkg = ps.pkg === name ? null : name;
+  renderPkgStores();
+  calc();
+}
+
+function togglePkgStore(id) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  ps.open = !ps.open;
+  renderPkgStores();
+}
+
+function addPkgStore() {
+  pkgStores.push(makePkgStore(pkgStores.length + 1));
+  renderPkgStores();
+  calc();
+}
+
+function removePkgStore(id) {
+  if (pkgStores.length === 1) return;
+  pkgStores = pkgStores.filter(s => s.id !== id);
+  renderPkgStores();
+  calc();
+}
+
+function copyPkgStore(id) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  const cp = JSON.parse(JSON.stringify(ps));
+  cp.id = pkgStoreIdCounter++;
+  cp.name = ps.name + ' (コピー)';
+  pkgStores.push(cp);
+  renderPkgStores();
+  calc();
+}
+
+function setPkgStoreField(id, key, val) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  if (['insmart_ids','account_ids','core_ids','addon_core_ids','storeMultiplier'].includes(key)) {
+    ps[key] = Math.max(1, parseInt(val) || 1);
+  } else {
+    ps[key] = val;
+  }
+  if (key !== 'name') calc();
+}
+
+function adjPkgStore(id, key, delta) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  ps[key] = Math.max(1, (ps[key] || 1) + delta);
+  renderPkgStores();
+  calc();
+}
+
+function setPkgStoreMedia(id, mediaKey, val) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  ps.media[mediaKey] = val;
+  calc();
+}
+
+function setPkgStoreAddon(id, sysKey, val) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  ps[`addon_${sysKey}`] = val;
+  const optEl = document.getElementById(`pkgAddCoreOpt_${id}`);
+  if (optEl && sysKey === 'core') optEl.style.display = val ? '' : 'none';
+  calc();
+}
+
+// ── Custom store helpers ──────────────────
+function hasCustomSys(ps) {
+  return ps.c_e_answer || ps.c_insmart || ps.c_core ||
+         ps.c_smart_sign_buy || ps.c_smart_sign_sell ||
+         ps.c_e_kessai || ps.c_store_perf ||
+         Object.values(ps.c_media).some(v => v);
+}
+
+function buildCustomStoreBody(ps) {
+  let html = '<div>';
+  SYS.forEach(s => {
+    const ck = 'c_' + s.key;
+    const checked = ps[ck] ? 'checked' : '';
+    const isOpen = ps[ck] ? 'open' : '';
+    let subHtml = '';
+
+    if (s.hasIDs && !s.isMedia) {
+      const idKey = s.key === 'insmart' ? 'c_insmart_ids' : 'c_core_ids';
+      const idVal = ps[idKey];
+      subHtml += `<div class="sys-sub-row">
+        <span>${s.idLabel}</span>
+        <div class="num-ctrl-sm">
+          <button onclick="adjPkgCustom(${ps.id},'${idKey}',-1)">−</button>
+          <input type="number" value="${idVal}" min="1"
+            oninput="setPkgCustomField(${ps.id},'${idKey}',+this.value)">
+          <button onclick="adjPkgCustom(${ps.id},'${idKey}',1)">＋</button>
+        </div>
+      </div>`;
+      if (s.hasType) {
+        subHtml += `<div class="radio-row" style="margin-top:6px">
+          <label><input type="radio" name="cCoreType_${ps.id}" value="media"
+            ${ps.c_core_type==='media'?'checked':''} onchange="setPkgCustomField(${ps.id},'c_core_type','media')">
+            媒体取り込み（初期¥100,000/店舗・月額¥50,000/店舗）</label>
+          <label><input type="radio" name="cCoreType_${ps.id}" value="nomedia"
+            ${ps.c_core_type==='nomedia'?'checked':''} onchange="setPkgCustomField(${ps.id},'c_core_type','nomedia')">
+            取り込み無し（初期¥50,000/店舗・月額¥30,000/店舗）</label>
+        </div>`;
+      }
+    }
+    if (s.isMedia) {
+      subHtml += `<div class="media-grid" style="margin-top:2px">${MEDIA_LIST.map(m => `
+        <label class="media-item">
+          <input type="checkbox" ${ps.c_media[m.key]?'checked':''}
+            onchange="setPkgCustomMedia(${ps.id},'${m.key}',this.checked)">
+          ${m.name}<span class="media-monthly">¥${m.monthly.toLocaleString()}/月</span>
+        </label>`).join('')}</div>`;
+    }
+
+    html += `<div class="sys-row">
+      <input type="checkbox" ${checked}
+        onchange="setPkgCustomSys(${ps.id},'${s.key}',this.checked)">
+      <div class="sys-info">
+        <div class="sys-name">${s.name}</div>
+        <div class="sys-hint">${s.hint}</div>
+        ${subHtml ? `<div class="sys-sub ${isOpen}" id="pkgCSub${ps.id}_${s.key}">${subHtml}</div>` : ''}
+      </div>
+    </div>`;
+  });
+  // アカウント数（全システム共通）：常時表示
+  html += `<div class="field-row" style="margin-top:8px;padding:8px 12px;background:#f8fafc;border-radius:6px;border:1px solid #e5e7eb">
+    <div class="field-label">👤 アカウント数（全システム共通）
+      <div class="field-sub">5IDまで無料。6ID目以降は初期¥5,000/ID</div>
+    </div>
+    <div class="num-ctrl-sm">
+      <button onclick="adjPkgCustom(${ps.id},'c_account_ids',-1)">−</button>
+      <input type="number" value="${ps.c_account_ids}" min="1" max="99"
+        oninput="setPkgCustomField(${ps.id},'c_account_ids',+this.value)">
+      <button onclick="adjPkgCustom(${ps.id},'c_account_ids',1)">＋</button>
+    </div>
+  </div>`;
+  html += '</div>';
+  return html;
+}
+
+function setPkgStoreType(id, type) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  ps.type = type;
+  renderPkgStores();
+  calc();
+}
+
+function setPkgCustomSys(id, sysKey, val) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  ps['c_' + sysKey] = val;
+  const subEl = document.getElementById(`pkgCSub${id}_${sysKey}`);
+  if (subEl) subEl.classList.toggle('open', val);
+  calc();
+}
+
+function setPkgCustomField(id, key, val) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  if (key.includes('_ids')) {
+    ps[key] = Math.max(1, parseInt(val) || 1);
+  } else {
+    ps[key] = val;
+  }
+  calc();
+}
+
+function adjPkgCustom(id, key, delta) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  ps[key] = Math.max(1, (ps[key] || 1) + delta);
+  renderPkgStores();
+  calc();
+}
+
+function setPkgCustomMedia(id, mediaKey, val) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  ps.c_media[mediaKey] = val;
+  calc();
+}
+
+// ══════════════════════════════════════════
+//  SINGLE MODE – STORE RENDERING
+// ══════════════════════════════════════════
+function renderStores() {
+  const list = document.getElementById('storeList');
+  list.innerHTML = stores.map((st, idx) => renderStoreCard(st, idx)).join('');
+  document.getElementById('storeSummaryBadge').textContent = `${stores.length}店舗`;
+
+  // ストアチップ一覧を更新
+  const chips = document.getElementById('storeSummaryChips');
+  if (chips) {
+    const storeChips = stores.map((st, idx) => {
+      const hasSys = Object.entries(st).some(([k,v]) => typeof v==='boolean' && v);
+      return `<span class="store-summary-chip ${hasSys?'active':''}" onclick="scrollToStore(${st.id})" style="cursor:pointer">
+        ${idx+1}. ${st.name}${hasSys?' ✓':''}
+      </span>`;
+    }).join('');
+    chips.innerHTML = `<span style="font-weight:600;color:#374151;margin-right:4px">店舗一覧：</span>${storeChips}
+      <span style="margin-left:auto;color:#9ca3af;font-size:11px">✓ = システム設定済み</span>`;
+  }
+
+  updateAccountPanel();
+}
+
+// アカウント数パネルの表示を更新
+function updateAccountPanel() {
+  const hasInsmart = stores.some(st => st.insmart);
+  const ctrl = document.getElementById('accountFeeCtrl');
+  const auto = document.getElementById('accountFeeAuto');
+  const hint = document.getElementById('accountFeeHint');
+  if (!ctrl || !auto) return;
+  if (hasInsmart) {
+    ctrl.style.display = 'none';
+    auto.style.display = 'block';
+    if (hint) hint.textContent = 'インスマートシステムのID数から自動計算（1ID目無料）';
+  } else {
+    ctrl.style.display = 'flex';
+    auto.style.display = 'none';
+    if (hint) hint.textContent = 'システムを利用するユーザー数（アカウント発行費 ¥5,000/ID）';
+  }
+}
+
+function setSingleAccountCount(val) {
+  singleAccountCount = Math.max(1, parseInt(val) || 1);
+  calc();
+}
+
+function adjSingleAccount(delta) {
+  singleAccountCount = Math.max(1, singleAccountCount + delta);
+  const inp = document.getElementById('singleAccountInput');
+  if (inp) inp.value = singleAccountCount;
+  calc();
+}
+
+function scrollToStore(id) {
+  const el = document.getElementById(`storeCard${id}`);
+  if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+  // 閉じていたら開く
+  const st = stores.find(s => s.id === id);
+  if (st && !st.open) { st.open = true; renderStores(); }
+}
+
+function renderStoreCard(st, idx) {
+  const sysRows = SYS.map(s => {
+    const checked = st[s.key] ? 'checked' : '';
+    let subHtml = '';
+
+    if (s.hasIDs && !s.isMedia) {
+      const idVal = s.key === 'insmart' ? st.insmart_ids : st.core_ids;
+      const idKey = s.key === 'insmart' ? 'insmart_ids' : 'core_ids';
+      subHtml += `<div class="sys-sub-row">
+        <span>${s.idLabel}</span>
+        <div class="num-ctrl-sm">
+          <button onclick="adjStore(${st.id},'${idKey}',-1)">−</button>
+          <input type="number" id="st${st.id}_${idKey}" value="${idVal}" min="1"
+            oninput="setStore(${st.id},'${idKey}',this.value)">
+          <button onclick="adjStore(${st.id},'${idKey}',1)">＋</button>
+        </div>
+      </div>`;
+      if (s.hasType) {
+        subHtml += `<div class="radio-row" style="margin-top:6px">
+          <label><input type="radio" name="coreType_${st.id}" value="media"
+            ${st.core_type==='media'?'checked':''} onchange="setStore(${st.id},'core_type','media')">
+            媒体取り込み（初期¥100,000/店舗・月額¥50,000/店舗）</label>
+          <label><input type="radio" name="coreType_${st.id}" value="nomedia"
+            ${st.core_type==='nomedia'?'checked':''} onchange="setStore(${st.id},'core_type','nomedia')">
+            取り込み無し（初期¥50,000/店舗・月額¥30,000/店舗）</label>
+        </div>`;
+      }
+    }
+    if (s.isMedia) {
+      subHtml += `<div class="media-grid" style="margin-top:2px">${MEDIA_LIST.map(m => `
+        <label class="media-item">
+          <input type="checkbox" id="st${st.id}_media_${m.key}"
+            ${st.media[m.key]?'checked':''}
+            onchange="setStoreMedia(${st.id},'${m.key}',this.checked)">
+          ${m.name}<span class="media-monthly">¥${m.monthly.toLocaleString()}/月</span>
+        </label>`).join('')}</div>`;
+    }
+
+    const subOpen = st[s.key] ? 'open' : '';
+    return `<div class="sys-row">
+      <input type="checkbox" id="st${st.id}_${s.key}" ${checked}
+        onchange="setStore(${st.id},'${s.key}',this.checked)">
+      <div class="sys-info">
+        <div class="sys-name">${s.name}</div>
+        <div class="sys-hint">${s.hint}</div>
+        ${subHtml ? `<div class="sys-sub ${subOpen}" id="stSub${st.id}_${s.key}">${subHtml}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const canDelete = stores.length > 1;
+  const hasSys = Object.entries(st).some(([k,v]) => typeof v==='boolean' && v);
+  return `
+    <div class="store-card" id="storeCard${st.id}">
+      <div class="store-header" onclick="toggleStore(${st.id})">
+        <div class="store-num">${idx+1}</div>
+        <input class="store-name-input" type="text" value="${st.name}"
+          onclick="event.stopPropagation()"
+          oninput="setStore(${st.id},'name',this.value)"
+          placeholder="店舗名を入力">
+        ${hasSys ? `<span style="font-size:10px;background:#dcfce7;color:#16a34a;padding:2px 7px;border-radius:20px;white-space:nowrap;font-weight:600">✓ 設定済み</span>` : `<span style="font-size:10px;color:#9ca3af;padding:2px 7px;white-space:nowrap">未設定</span>`}
+        <div onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;margin-left:4px">
+          <span style="font-size:11px;color:#64748b;white-space:nowrap">×</span>
+          <input type="number" min="1" max="99" value="${st.storeMultiplier||1}"
+            oninput="setStore(${st.id},'storeMultiplier',Math.max(1,parseInt(this.value)||1));calc()"
+            style="width:36px;border:none;background:transparent;font-size:13px;font-weight:700;color:#1e3a5f;text-align:center;outline:none;padding:0">
+          <span style="font-size:11px;color:#64748b;white-space:nowrap">店舗</span>
+        </div>
+        <span class="toggle-icon ${st.open?'open':''}">▲</span>
+        <button class="store-delete" onclick="event.stopPropagation();copyStore(${st.id})" title="この店舗の設定をコピーして追加" style="font-size:12px;color:#6b7280;border-color:#d1d5db" title="コピー">📋</button>
+        ${canDelete ? `<button class="store-delete" onclick="event.stopPropagation();removeStore(${st.id})" title="この店舗を削除">×</button>` : ''}
+      </div>
+      <div class="store-body ${st.open?'open':''}" id="storeBody${st.id}">
+        ${sysRows}
+      </div>
+    </div>`;
+}
+
+function toggleStore(id) {
+  const st = stores.find(s => s.id === id);
+  if (!st) return;
+  st.open = !st.open;
+  renderStores();
+}
+
+function addStore() {
+  stores.push(makeStore(stores.length + 1));
+  renderStores();
+  calc();
+}
+
+function removeStore(id) {
+  if (stores.length <= 1) return;
+  stores = stores.filter(s => s.id !== id);
+  renderStores();
+  calc();
+}
+
+function copyStore(id) {
+  const src = stores.find(s => s.id === id);
+  if (!src) return;
+  const copy = JSON.parse(JSON.stringify(src)); // deep copy
+  copy.id = storeIdCounter++;
+  copy.name = src.name + '（コピー）';
+  copy.open = true;
+  stores.push(copy);
+  renderStores();
+  calc();
+  // スクロール
+  setTimeout(() => {
+    const el = document.getElementById(`storeCard${copy.id}`);
+    if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+  }, 50);
+}
+
+function setStore(id, key, val) {
+  const st = stores.find(s => s.id === id);
+  if (!st) return;
+  if (key === 'insmart_ids' || key === 'core_ids') {
+    st[key] = Math.max(1, parseInt(val) || 1);
+  } else if (typeof st[key] === 'boolean' || val === true || val === false) {
+    st[key] = val === true || val === 'true' || val === true;
+    // toggle sub panel visibility
+    const sub = document.getElementById(`stSub${id}_${key}`);
+    if (sub) sub.classList.toggle('open', st[key]);
+  } else {
+    st[key] = val;
+  }
+  calc();
+}
+
+function setStoreMedia(id, mediaKey, val) {
+  const st = stores.find(s => s.id === id);
+  if (!st) return;
+  st.media[mediaKey] = val;
+  calc();
+}
+
+function adjStore(id, key, delta) {
+  const st = stores.find(s => s.id === id);
+  if (!st) return;
+  st[key] = Math.max(1, (st[key] || 1) + delta);
+  const el = document.getElementById(`st${id}_${key}`);
+  if (el) el.value = st[key];
+  calc();
+}
+
+// ══════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════
+function adj(id, delta) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = Math.max(parseInt(el.min||0), parseInt(el.value||0) + delta);
+  calc();
+}
+function getNum(id, def=0) {
+  const el = document.getElementById(id);
+  return el ? Math.max(0, parseInt(el.value)||def) : def;
+}
+function chk(id) { const el=document.getElementById(id); return el?el.checked:false; }
+function fmt(n) { return '¥' + n.toLocaleString(); }
+
+// ══════════════════════════════════════════
+//  CALC DISPATCH
+// ══════════════════════════════════════════
+function calc() {
+  if (mode === 'pkg') calcPackage();
+  else calcSingle();
+}
+
+// ──────────────────────────────────────────
+//  PACKAGE CALC
+// ──────────────────────────────────────────
+function calcPackage() {
+  const activePkgStores = pkgStores.filter(ps =>
+    ps.type === 'pkg' ? ps.pkg : hasCustomSys(ps)
+  );
+  if (activePkgStores.length === 0) {
+    document.getElementById('qTotal').textContent = '¥ −';
+    document.getElementById('qBody').innerHTML = '<div class="empty-msg">パッケージを選択するかカスタムシステムを設定してください</div>';
+    return;
+  }
+
+  let iL = [], ti = 0, tm = 0;
+  const initShown = new Set();
+  const storeSections = [];
+
+  // Law-level trackers for custom stores
+  let cAnyInsmart=false, cAnySSBuy=false, cAnySSSell=false, cAnyEKessai=false, cAnyStorPerf=false;
+
+  pkgStores.forEach(ps => {
+    if (ps.type === 'pkg') {
+      // ───────────────────── PACKAGE TYPE ─────────────────────
+      if (!ps.pkg) return;
+      const pkg = PACKAGES[ps.pkg];
+      let sm = 0;
+      const sml = [];
+
+      sml.push({ n:`${ps.pkg}パッケージ`, a: pkg.monthly });
+      sm += pkg.monthly;
+
+      const extraIDs = Math.max(0, ps.insmart_ids - 5);
+      if (extraIDs > 0) {
+        sml.push({ n:`インスマートシステム 追加ID × ${extraIDs}ID`, a: extraIDs * 3000 });
+        sm += extraIDs * 3000;
+      }
+
+      if (ps.pkg === 'DX') {
+        // coreシステムはDXパッケージ込み。5IDまで無料、6ID目以降¥2,000/ID月額
+        const coreExtra = Math.max(0, ps.core_ids - 5);
+        if (coreExtra > 0) {
+          const cMon = 2000 * coreExtra;
+          sml.push({ n:`coreシステム 追加ID × ${coreExtra}ID`, a: cMon });
+          sm += cMon;
+        }
+        sml.push({ n:`coreシステム ${Math.min(ps.core_ids,5)}ID（パッケージ込み・無料）`, a:0, inc:true });
+      }
+
+      SYS.filter(s => !pkg.inc[s.key] && s.key !== 'insmart').forEach(s => {
+        if (s.isMedia) {
+          MEDIA_LIST.forEach(m => {
+            if (ps.media[m.key]) { sml.push({ n:m.name, a: m.monthly }); sm += m.monthly; }
+          });
+        } else if (s.key === 'core') {
+          if (ps.addon_core) {
+            const ci = ps.addon_core_type === 'media'
+              ? { n:'coreシステム（媒体取り込み）', monthly: 50000 }
+              : { n:'coreシステム（取り込み無し）', monthly: 30000 };
+            sml.push({ n:ci.n, a:ci.monthly }); sm += ci.monthly;
+            sml.push({ n:`coreシステム ID × ${ps.addon_core_ids}ID`, a:2000*ps.addon_core_ids }); sm += 2000*ps.addon_core_ids;
+          }
+        } else {
+          if (ps[`addon_${s.key}`]) {
+            const mon = SYS_MON_MAP[s.key] || 0;
+            sml.push({ n:s.name, a: mon }); sm += mon;
+          }
+        }
+      });
+
+      if (pkg.inc.media) {
+        sml.push({ n:'媒体連携（CS・Goo・AS・オークネット）パッケージ込み', a:0, inc:true });
+      }
+
+      const mult = ps.storeMultiplier || 1;
+      tm += sm * mult;
+      storeSections.push({ name: mult > 1 ? `${ps.name}（×${mult}店舗）` : ps.name,
+        type:'pkg', pkg: ps.pkg, mL: sml, sm, mult });
+
+      if (!initShown.has(ps.pkg)) {
+        initShown.add(ps.pkg);
+        iL.push({ n:`${ps.pkg}パッケージ システム初期費用（パッケージ込み）`, a:0, free:true });
+      }
+      const accExtra = Math.max(0, ps.account_ids - 5);
+      if (accExtra > 0) {
+        const a = accExtra * 5000 * mult;
+        iL.push({ n:`アカウント発行費 × ${accExtra * mult}ID（${ps.name}・6ID目以降）`, a }); ti += a;
+      } else {
+        iL.push({ n:`アカウント発行費（${ps.name}・${ps.account_ids}ID・5IDまで無料）`, a:0, free:true });
+      }
+
+    } else {
+      // ───────────────────── CUSTOM TYPE ─────────────────────
+      if (!hasCustomSys(ps)) return;
+      const mult = ps.storeMultiplier || 1;
+      let sml = [], siL = [];
+      let sm = 0;
+
+      if (ps.c_e_answer) {
+        siL.push({ n:'e-アンサー 初期', a:5000 });
+        sml.push({ n:'e-アンサー 月額', a:10000 }); sm += 10000;
+      }
+      if (ps.c_insmart) {
+        cAnyInsmart = true;
+        const mID = 3000 * ps.c_insmart_ids;
+        sml.push({ n:`インスマートシステム ${ps.c_insmart_ids}ID × ¥3,000`, a:mID }); sm += mID;
+      }
+      if (ps.c_core) {
+        const ci = ps.c_core_type === 'media'
+          ? { n:'coreシステム（媒体取り込み）', init:100000, mon:50000 }
+          : { n:'coreシステム（取り込み無し）', init:50000, mon:30000 };
+        siL.push({ n:`${ci.n} 初期`, a:ci.init });
+        sml.push({ n:ci.n, a:ci.mon }); sm += ci.mon;
+        sml.push({ n:`coreシステム ID × ${ps.c_core_ids}ID`, a:2000*ps.c_core_ids }); sm += 2000*ps.c_core_ids;
+      }
+      if (ps.c_smart_sign_buy)  { cAnySSBuy=true;   sml.push({ n:'買取スマートサイン', a:15000 }); sm+=15000; }
+      if (ps.c_smart_sign_sell) { cAnySSSell=true;  sml.push({ n:'販売スマートサイン', a:15000 }); sm+=15000; }
+      if (ps.c_e_kessai)        { cAnyEKessai=true; sml.push({ n:'e-決済（振込システム）', a:5000 }); sm+=5000; }
+      if (ps.c_store_perf)      { cAnyStorPerf=true;sml.push({ n:'ストアパフォーマンス', a:10000 }); sm+=10000; }
+      MEDIA_LIST.forEach(m => {
+        if (ps.c_media[m.key]) { sml.push({ n:m.name, a:m.monthly }); sm += m.monthly; }
+      });
+
+      // アカウント発行費（カスタム店舗：全システム共通アカウント数で計算、5IDまで無料）
+      const accIds = ps.c_account_ids;
+      const accExtra = Math.max(0, accIds - 5);
+      if (accExtra > 0) {
+        siL.push({ n:`アカウント発行費 × ${accExtra}ID（6ID目以降）`, a: accExtra * 5000 });
+      } else {
+        siL.push({ n:`アカウント発行費（${accIds}ID・5IDまで無料）`, a:0, free:true });
+      }
+
+      // Per-store init fees go into main iL with store name prefix（mult倍）
+      siL.forEach(l => {
+        const a = l.free ? 0 : l.a * mult;
+        iL.push({ ...l, n:`${ps.name}：${l.n}`, a });
+        if (!l.free) ti += a;
+      });
+      tm += sm * mult;
+      storeSections.push({ name: mult > 1 ? `${ps.name}（×${mult}店舗）` : ps.name,
+        type:'custom', mL: sml, sm, mult });
+    }
+  });
+
+  // ── Law-level fees for custom stores (once per 法人) ──
+  const lawML = [], lawIL = [];
+  let lm = 0;
+  if (cAnyInsmart) {
+    lawML.push({ n:'インスマートシステム 基本（法人）', a:2000 }); lm += 2000;
+  }
+  if (cAnySSBuy)    lawIL.push({ n:'買取スマートサイン 初期（法人）',      a:5000 });
+  if (cAnySSSell)   lawIL.push({ n:'販売スマートサイン 初期（法人）',      a:5000 });
+  if (cAnyEKessai)  lawIL.push({ n:'e-決済（振込システム）初期（法人）',   a:5000 });
+  if (cAnyStorPerf) lawIL.push({ n:'ストアパフォーマンス 初期（法人）',    a:5000 });
+  lawIL.forEach(l => { iL.push(l); if (!l.free) ti += l.a; });
+  tm += lm;
+  if (lawML.length > 0 || lawIL.length > 0) {
+    storeSections.push({ name:'法人共通（カスタム分）', type:'law', mL: lawML, sm: lm });
+  }
+
+  renderQuotePkg(iL, ti, tm, storeSections);
+}
+
+// ──────────────────────────────────────────
+//  SINGLE CALC (per store)
+// ──────────────────────────────────────────
+function calcSingle() {
+  if (!stores.some(st => Object.keys(st).some(k => typeof st[k]==='boolean' && st[k]))) {
+    document.getElementById('qTotal').textContent = '¥ −';
+    document.getElementById('qBody').innerHTML = '<div class="empty-msg">いずれかの店舗でシステムを選択してください</div>';
+    return;
+  }
+
+  let totalInit=0, totalMonthly=0;
+  const storeSections = [];
+
+  // Law-level: track which systems are used across all stores
+  let anyInsmart=false, anySSBuy=false, anySSSell=false, anyEKessai=false, anyStorPerf=false;
+  let totalInsmartIDs=0;
+
+  stores.forEach(st => {
+    const mult = st.storeMultiplier || 1;  // ×N店舗 倍数
+    let iL=[], mL=[];
+    let si=0, sm=0;
+
+    if (st.e_answer) {
+      iL.push({ n:'e-アンサー 初期', a:5000 }); si+=5000;
+      mL.push({ n:'e-アンサー 月額', a:10000 }); sm+=10000;
+    }
+    if (st.insmart) {
+      anyInsmart = true;
+      totalInsmartIDs += st.insmart_ids * mult;
+      const mID = 3000 * st.insmart_ids;
+      mL.push({ n:`インスマートシステム ${st.insmart_ids}ID × ¥3,000`, a:mID }); sm+=mID;
+    }
+    if (st.core) {
+      const ci = st.core_type==='media'
+        ? { n:'coreシステム（媒体取り込み）', init:100000, mon:50000 }
+        : { n:'coreシステム（取り込み無し）', init:50000, mon:30000 };
+      iL.push({ n:`${ci.n} 初期`, a:ci.init }); si+=ci.init;
+      mL.push({ n:ci.n, a:ci.mon }); sm+=ci.mon;
+      mL.push({ n:`coreシステム ID × ${st.core_ids}ID`, a:2000*st.core_ids }); sm+=2000*st.core_ids;
+    }
+    if (st.smart_sign_buy)  { anySSBuy=true;   mL.push({ n:'買取スマートサイン', a:15000 }); sm+=15000; }
+    if (st.smart_sign_sell) { anySSSell=true;  mL.push({ n:'販売スマートサイン', a:15000 }); sm+=15000; }
+    if (st.e_kessai)        { anyEKessai=true; mL.push({ n:'e-決済（振込システム）', a:5000 }); sm+=5000; }
+    if (st.store_perf)      { anyStorPerf=true;mL.push({ n:'ストアパフォーマンス', a:10000 }); sm+=10000; }
+    if (st.media) {
+      MEDIA_LIST.forEach(m => {
+        if (st.media[m.key]) { mL.push({ n:m.name, a:m.monthly }); sm+=m.monthly; }
+      });
+    }
+
+    // mult倍にして合計に加算
+    totalInit    += si * mult;
+    totalMonthly += sm * mult;
+    storeSections.push({ name: mult > 1 ? `${st.name}（×${mult}店舗）` : st.name,
+      iL, mL, si, sm, mult });
+  });
+
+  // Law-level fees (charged once per 法人)
+  const lawInit = [], lawMonthly = [];
+  let li=0, lm=0;
+
+  if (anyInsmart) {
+    lawMonthly.push({ n:'インスマートシステム 基本（法人）', a:2000 }); lm+=2000;
+  }
+  // 法人単位の初期費用（各システム1回のみ）
+  if (anySSBuy)    { lawInit.push({ n:'買取スマートサイン 初期（法人）', a:5000 }); li+=5000; }
+  if (anySSSell)   { lawInit.push({ n:'販売スマートサイン 初期（法人）', a:5000 }); li+=5000; }
+  if (anyEKessai)  { lawInit.push({ n:'e-決済（振込システム）初期（法人）', a:5000 }); li+=5000; }
+  if (anyStorPerf) { lawInit.push({ n:'ストアパフォーマンス 初期（法人）', a:5000 }); li+=5000; }
+
+  // アカウント発行費：インスマート使用時はID数から算出、未使用時は手動入力値を使用
+  const accountFeeCount = anyInsmart
+    ? Math.max(0, totalInsmartIDs - 1)  // インスマート1ID目は無料
+    : singleAccountCount;
+
+  if (accountFeeCount > 0) {
+    const feeAmt = accountFeeCount * 5000;
+    lawInit.push({ n:`アカウント発行費 × ${accountFeeCount}ID`, a: feeAmt }); li += feeAmt;
+  } else if (anyInsmart && totalInsmartIDs === 1) {
+    // インスマート1IDのみ（1ID目無料）
+    lawInit.push({ n:'アカウント発行費（1ID目無料）', a:0, free:true });
+  }
+
+  totalInit     += li;
+  totalMonthly  += lm;
+
+  renderQuoteSingle(storeSections, lawInit, lawMonthly, li, lm, totalInit, totalMonthly);
+}
+
+// ══════════════════════════════════════════
+//  RENDER QUOTE
+// ══════════════════════════════════════════
+
+// まとめ表示 / 店舗別 トグル
+function togglePkgView() {
+  pkgViewMode = pkgViewMode === 'consolidated' ? 'perstore' : 'consolidated';
+  if (lastQuoteData && lastQuoteData.mode === 'pkg') {
+    const { iL, ti, tm, storeSections } = lastQuoteData;
+    renderQuotePkg(iL, ti, tm, storeSections);
+  }
+}
+
+// 同じ項目を複数店舗分まとめて集約する（単価・件数・合計を保持）― 画面表示用
+function consolidateStoreLines(storeSections) {
+  const map = new Map();
+  storeSections.forEach(ss => {
+    if (ss.type === 'law') return;
+    ss.mL.forEach(l => {
+      const key = `${l.n}||${l.a||0}||${!!l.free}||${!!l.inc}`;
+      if (map.has(key)) {
+        map.get(key).count++;
+      } else {
+        map.set(key, { n:l.n, unitAmt:l.a||0, free:!!l.free, inc:!!l.inc, count:1 });
+      }
+    });
+  });
+  return Array.from(map.values());
+}
+
+// ダウンロード用：フラットな行リストを集約して {n, a, free, inc} 形式で返す
+function consolidateForDownload(lines) {
+  const map = new Map();
+  lines.forEach(l => {
+    const key = `${l.n}||${l.a||0}||${!!l.free}||${!!l.inc}`;
+    if (map.has(key)) {
+      map.get(key).count++;
+    } else {
+      map.set(key, { n:l.n, unitAmt:l.a||0, free:!!l.free, inc:!!l.inc, count:1 });
+    }
+  });
+  return Array.from(map.values()).map(item => {
+    if (item.count > 1 && !item.free && !item.inc) {
+      return { n:`${item.n} × ${item.count}店舗`, a: item.unitAmt * item.count };
+    }
+    return { n: item.n, a: item.unitAmt,
+      free: item.free || undefined, inc: item.inc || undefined };
+  });
+}
+
+// まとめ表示用の行HTML（単価 × N店舗 = 合計 の形式）
+function consolidatedLineHtml(item) {
+  if (item.free) {
+    return `<div class="q-line">
+      <span class="q-line-name">${item.n}${item.count>1?`（${item.count}店舗）`:''}</span>
+      <span class="q-line-free">無料</span>
+    </div>`;
+  }
+  if (item.inc) {
+    return `<div class="q-line">
+      <span class="q-line-name">${item.n}${item.count>1?`（${item.count}店舗）`:''}</span>
+      <span class="q-line-amt" style="color:#9ca3af">込</span>
+    </div>`;
+  }
+  if (item.count > 1) {
+    return `<div class="q-line" style="flex-wrap:wrap;gap:2px">
+      <span class="q-line-name" style="flex:1 1 100%">${item.n}</span>
+      <span style="font-size:10px;color:#6b7280;margin-left:12px">
+        ${fmt(item.unitAmt)} × ${item.count}店舗
+      </span>
+      <span class="q-line-amt" style="margin-left:auto">${fmt(item.unitAmt * item.count)}</span>
+    </div>`;
+  }
+  return `<div class="q-line">
+    <span class="q-line-name">${item.n}</span>
+    <span class="q-line-amt">${fmt(item.unitAmt)}</span>
+  </div>`;
+}
+
+function lineHtml(l) {
+  return `<div class="q-line">
+    <span class="q-line-name">${l.n}</span>
+    <span class="${l.free?'q-line-free':'q-line-amt'}">${l.free?'無料':l.inc?'込':fmt(l.a)}</span>
+  </div>`;
+}
+
+function renderQuotePkg(iL, ti, tm, storeSections) {
+  const mL = storeSections.flatMap(ss => ss.mL);
+  lastQuoteData = { mode:'pkg', iL, mL, ti, tm, storeSections };
+
+  const storeCount = storeSections.filter(ss => ss.type === 'pkg' || ss.type === 'custom').length;
+  document.getElementById('qTotal').innerHTML =
+    `<div style="font-size:11px;opacity:.75;margin-bottom:4px">${storeCount}店舗 合計（税抜）</div>
+     <div><span style="font-size:14px;opacity:.7">初期 </span>${fmt(ti)}</div>
+     <div style="font-size:14px;margin-top:2px"><span style="opacity:.7">月額 </span>${fmt(tm)}<span style="font-size:11px;opacity:.7">/月</span></div>`;
+
+  // トグルボタン（2店舗以上の場合のみ表示）
+  const isConsolidated = pkgViewMode === 'consolidated';
+  const toggleBtn = storeCount > 1
+    ? `<div style="display:flex;gap:4px;margin-bottom:8px">
+        <button onclick="togglePkgView()" style="font-size:10px;padding:3px 10px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;transition:all .15s;
+          background:${isConsolidated?'#1e3a5f':'#fff'};color:${isConsolidated?'#fff':'#374151'}">
+          🗂 まとめ表示
+        </button>
+        <button onclick="togglePkgView()" style="font-size:10px;padding:3px 10px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;transition:all .15s;
+          background:${!isConsolidated?'#1e3a5f':'#fff'};color:${!isConsolidated?'#fff':'#374151'}">
+          📋 店舗別表示
+        </button>
+      </div>`
+    : '';
+
+  let monthHtml = toggleBtn;
+
+  if (isConsolidated && storeCount > 1) {
+    // ── まとめ表示 ──
+    const consolidated = consolidateStoreLines(storeSections);
+    monthHtml += consolidated.map(consolidatedLineHtml).join('');
+
+    // 法人共通セクションは別途表示
+    storeSections.filter(ss => ss.type === 'law').forEach(ss => {
+      if (ss.mL.length > 0) {
+        monthHtml += `<div class="q-store-label" style="color:#7c3aed;margin-top:6px">🏢 ${ss.name}</div>`;
+        monthHtml += ss.mL.map(lineHtml).join('');
+      }
+    });
+  } else {
+    // ── 店舗別表示 ──
+    storeSections.forEach(ss => {
+      if (ss.type === 'pkg') {
+        const pkgColor = PACKAGES[ss.pkg].color;
+        monthHtml += `<div class="q-store-label">📦 ${ss.name}
+          <span style="color:${pkgColor};font-size:10px;font-weight:600;margin-left:4px">${ss.pkg}</span>
+          <span style="font-weight:400;color:#9ca3af;font-size:10px">（${fmt(ss.sm)}/月）</span>
+        </div>`;
+        monthHtml += ss.mL.map(lineHtml).join('');
+      } else if (ss.type === 'custom') {
+        monthHtml += `<div class="q-store-label">🔧 ${ss.name}
+          <span style="color:#7c3aed;font-size:10px;font-weight:600;margin-left:4px">カスタム</span>
+          <span style="font-weight:400;color:#9ca3af;font-size:10px">（${fmt(ss.sm)}/月）</span>
+        </div>`;
+        monthHtml += ss.mL.map(lineHtml).join('');
+      } else if (ss.type === 'law') {
+        if (ss.mL.length > 0) {
+          monthHtml += `<div class="q-store-label" style="color:#7c3aed">🏢 ${ss.name}</div>`;
+          monthHtml += ss.mL.map(lineHtml).join('');
+        }
+      }
+    });
+  }
+
+  document.getElementById('qBody').innerHTML = `
+    <div class="q-section">
+      <div class="q-section-title">初期費用（一括）</div>
+      ${iL.map(lineHtml).join('') || '<div style="color:#9ca3af;font-size:11px">なし</div>'}
+      <div class="q-subtotal"><span>初期合計</span><span class="amt">${fmt(ti)}</span></div>
+    </div>
+    <div class="q-section">
+      <div class="q-section-title">月額費用（毎月）</div>
+      ${monthHtml || '<div style="color:#9ca3af;font-size:11px">なし</div>'}
+      <div class="q-subtotal"><span>月額合計</span><span class="amt">${fmt(tm)}<span style="font-size:11px;font-weight:400;color:#9ca3af">/月</span></span></div>
+    </div>
+    <div class="q-annual">
+      <div class="label">年間概算コスト</div>
+      <div class="val">${fmt(ti + tm*12)}</div>
+      <div class="sub">初期 + 月額×12ヶ月</div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════
+//  QUOTE DOWNLOAD
+// ══════════════════════════════════════════
+function showDownloadModal() {
+  if (!lastQuoteData) { alert('先に条件を設定して見積を計算してください'); return; }
+  document.getElementById('dlModal').classList.add('open');
+  setTimeout(() => document.getElementById('dlCompany').focus(), 80);
+}
+function closeDownloadModal() {
+  document.getElementById('dlModal').classList.remove('open');
+}
+function execDownload() {
+  const company = document.getElementById('dlCompany').value.trim() || '株式会社〇〇';
+  const person  = document.getElementById('dlPerson').value.trim()  || '';
+  closeDownloadModal();
+  openQuoteWindow(company, person);
+}
+
+// Parse a line-item {n, a, free, inc} → structured table row object
+function parseLine(l) {
+  if (l.free) return { name: l.n.replace(/（パッケージ.*?）|（パッケージのため.*?）/, '').trim(),
+    qty:'−', unit:'−', unitPrice:'無　料', amount:'無　料', isFree:true };
+  if (l.inc)  return { name: l.n, qty:'−', unit:'−', unitPrice:'込　み', amount:'込　み', isInc:true };
+
+  // "名前 × N店舗/ID/法人" pattern (package lines)
+  const m1 = l.n.match(/^(.+?) × (\d+)(店舗|ID|法人)/);
+  if (m1) {
+    const qty = parseInt(m1[2]), unit = m1[3];
+    return { name: m1[1], qty, unit, unitPrice: Math.round(l.a/qty), amount: l.a };
+  }
+
+  // "インスマートシステム NID × ¥3,000" pattern (single mode per-store)
+  const m2 = l.n.match(/^インスマートシステム (\d+)ID × ¥/);
+  if (m2) {
+    const qty = parseInt(m2[1]);
+    return { name: 'インスマートシステム', qty, unit: 'ID', unitPrice: Math.round(l.a / qty), amount: l.a };
+  }
+
+  // "アカウント発行費 × NID" or "アカウント発行費 NID" pattern
+  const m3 = l.n.match(/アカウント発行費[^0-9]*(\d+)ID/);
+  if (m3) {
+    const qty = parseInt(m3[1]);
+    return { name: 'アカウント発行費', qty, unit: 'ID', unitPrice: 5000, amount: l.a };
+  }
+
+  // Law-level items containing （法人） → unit: 法人
+  if (l.n.includes('（法人）')) {
+    return { name: l.n, qty: 1, unit: '法人', unitPrice: l.a, amount: l.a };
+  }
+
+  // Default: per 店舗
+  return { name: l.n, qty: 1, unit: '店舗', unitPrice: l.a, amount: l.a };
+}
+
+function fmtY(v) {
+  if (typeof v !== 'number') return v;
+  return '¥' + v.toLocaleString();
+}
+
+function buildTableRows(lines, skipFreeInc = false) {
+  return lines.map(l => {
+    const p = parseLine(l);
+    if (skipFreeInc && (p.isFree || p.isInc)) return '';
+    const style = p.isFree ? ' style="color:#16a34a"' : p.isInc ? ' style="color:#9ca3af"' : '';
+    return `<tr${style}>
+      <td>${p.name}</td>
+      <td class="c">${p.qty}</td>
+      <td class="c">${p.unit}</td>
+      <td class="r">${fmtY(p.unitPrice)}</td>
+      <td class="r">${fmtY(p.amount)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openQuoteWindow(company, person) {
+  const d = new Date();
+  const dateStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+  const q = lastQuoteData;
+
+  let iL, mL, ti, tm, subSystems, storeCount;
+
+  if (q.mode === 'pkg') {
+    iL = q.iL; ti = q.ti; tm = q.tm;
+    // mult倍を展開してから集約（法人共通は末尾に）
+    const storeMl = q.storeSections.filter(ss => ss.type !== 'law').flatMap(ss => {
+      const mult = ss.mult || 1;
+      return Array.from({length: mult}, () => ss.mL).flat();
+    });
+    const lawMl = q.storeSections.filter(ss => ss.type === 'law').flatMap(ss => ss.mL);
+    mL = [...consolidateForDownload(storeMl), ...lawMl];
+    const storeDescs = q.storeSections
+      .filter(ss => ss.type === 'pkg' || ss.type === 'custom')
+      .map(ss => {
+        if (ss.type === 'pkg') {
+          const pkg = PACKAGES[ss.pkg];
+          const incList = Object.entries(pkg.inc).filter(([,v])=>v).map(([k])=>PKG_LABELS[k]);
+          return `${ss.name}：${ss.pkg}パッケージ（${incList.join('・')}）`;
+        } else {
+          return `${ss.name}：カスタム`;
+        }
+      });
+    subSystems = storeDescs.join('　/　');
+    storeCount = storeDescs.length;
+
+  } else {
+    // Single mode: aggregate（×N店舗 倍数を考慮して集約）
+    // 初期費用も mult 倍で展開
+    const expandedIL = q.storeSections.flatMap(s => {
+      const mult = s.mult || 1;
+      return Array.from({length: mult}, () => s.iL).flat();
+    });
+    iL = [...expandedIL, ...q.lawInit];
+    // 月額費用も mult 倍で展開してから集約
+    const expandedML = q.storeSections.flatMap(s => {
+      const mult = s.mult || 1;
+      return Array.from({length: mult}, () => s.mL).flat();
+    });
+    mL = [...consolidateForDownload(expandedML), ...q.lawMonthly];
+    ti = q.totalInit; tm = q.totalMonthly;
+    const sysNames = [...new Set(
+      mL.filter(l=>!l.inc).map(l=>{ const m=l.n.match(/^(.+?)[ 　×]/); return m?m[1]:l.n; })
+    )];
+    subSystems = sysNames.slice(0,5).join('、');
+    storeCount = q.storeSections.length;
+  }
+
+  // ── Conditional 補足事項 ──
+  const allNames = [...iL, ...mL].map(l => l.n).join(' ');
+  const hasSSSell    = allNames.includes('販売スマートサイン');
+  const hasMedia     = allNames.includes('媒体連携') || MEDIA_LIST.some(m => allNames.includes(m.name));
+  const hasStorPerf  = allNames.includes('ストアパフォーマンス');
+
+  const isPkg = lastQuoteData?.mode === 'pkg';
+  let notesLines = [];
+  if (isPkg) {
+    notesLines.push('各システムのアカウント発行費は1IDにつき ¥5,000 がかかります（パッケージはインスマートシステム5IDまで無料、6ID目以降は ¥5,000/ID）。');
+  } else {
+    notesLines.push('各システムのアカウント発行費は1IDにつき ¥5,000 がかかります（インスマートシステムのみ1ID目無料）。');
+  }
+  notesLines.push('各システムは 12カ月毎の更新となります。');
+  if (hasSSSell)   notesLines.push('販売スマートサインは JOCAR連携が必須となり、別途 JCM社へのオプション申込が必要となります。');
+  if (hasStorPerf) notesLines.push('ストアパフォーマンス（業績管理システム）は JOCARとの連携が必須です。別途 JCM社のご契約が必要となります。');
+  if (hasMedia)    notesLines.push('媒体連携はすべて各媒体との個別契約が必要です。');
+  notesLines.push('御見積金額に消費税は含まれておりません。');
+  notesLines.push('御見積有効期限は発行日より 2週間となります。');
+  const notesHtml = notesLines.join('<br>');
+
+  // Build table HTML strings
+  const nonFreeInit = iL.filter(l => !l.free && !l.inc && l.a > 0);
+  const initSection = ti > 0 && nonFreeInit.length > 0 ? `
+    <h3 class="sec-h">【初期費用】</h3>
+    <table>
+      <thead><tr><th>項目</th><th>数量</th><th>単位</th><th>単価</th><th>金額</th></tr></thead>
+      <tbody>${buildTableRows(nonFreeInit)}</tbody>
+      <tfoot><tr class="sub"><td colspan="4">小計</td><td>${fmtY(ti)}</td></tr></tfoot>
+    </table>` : '';
+
+  // Monthly: skip zero-amount included lines
+  const monthRows = buildTableRows(mL.filter(l => !l.inc || l.a > 0));
+
+  const html = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>御見積書 − ${company}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;font-size:11.5px;color:#000;background:#fff}
+.page{width:210mm;min-height:297mm;padding:14mm 16mm;margin:0 auto}
+/* header */
+.hdr{display:flex;align-items:flex-start;justify-content:space-between}
+h1{font-size:30px;font-weight:900;letter-spacing:10px}
+.meta{text-align:right;font-size:11px;line-height:1.8}
+.bar{height:3px;background:#2d6a9f;margin:10px 0 18px}
+/* customer block */
+.cust-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:20px}
+.cust-left{flex:1}
+.cust-name{font-size:19px;font-weight:700;border-bottom:2px solid #000;padding-bottom:4px;display:inline-block;min-width:260px}
+.intro{font-size:12px;margin:10px 0 10px}
+.total-row{border-bottom:2px solid #000;padding:7px 0;display:flex;align-items:baseline;gap:14px}
+.total-label{font-size:12px;font-weight:600;white-space:nowrap}
+.total-amt{font-size:24px;font-weight:900;color:#1a3a5c}
+.total-dash{font-size:20px;font-weight:700;color:#9ca3af;margin-left:4px}
+.init-tag{font-size:11px;font-weight:600}
+.co-right{width:190px;flex-shrink:0;border-left:2px solid #2d6a9f;padding-left:12px;font-size:10px;line-height:1.75}
+.co-logo{margin-bottom:6px}
+.co-c7{color:#2d6a9f;font-size:13px;font-weight:900;letter-spacing:1px}
+.co-df{font-size:15px;font-weight:900;letter-spacing:0}
+.co-df .d{color:#2d6a9f}.co-df .f{color:#e84b3a}
+/* subject */
+.subj{margin-bottom:16px;font-size:11.5px;line-height:1.9;border-left:3px solid #2d6a9f;padding-left:8px}
+/* tables */
+.sec-h{font-size:12px;font-weight:700;background:#1a3a5c;color:#fff;padding:4px 10px;margin-bottom:0}
+table{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:11px}
+thead tr{background:#dce9f4}
+th,td{border:1px solid #b8c8d8;padding:5px 6px}
+th{font-weight:700;text-align:center}
+td.c{text-align:center}td.r{text-align:right}
+tbody tr:nth-child(even){background:#f4f8fc}
+tfoot tr.sub td{font-weight:700;text-align:right;background:#dce9f4;font-size:12px}
+/* notes */
+.notes-wrap{margin-top:4px}
+.notes-h{font-size:11px;font-weight:700;background:#1a3a5c;color:#fff;padding:3px 10px;display:inline-block;margin-bottom:0}
+.notes-body{border:1px solid #c8d4e0;padding:9px 12px;font-size:10.5px;line-height:1.85;background:#f8fafc}
+/* print button (hidden on print) */
+.no-print{text-align:center;padding:22px;background:#f4f6f9;border-top:1px solid #dde}
+@media print{
+  .no-print{display:none}
+  body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .page{padding:10mm 13mm}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="hdr">
+    <h1>御　見　積　書</h1>
+    <div class="meta"><div>見積No：</div><div>発行日：${dateStr}</div></div>
+  </div>
+  <div class="bar"></div>
+
+  <div class="cust-row">
+    <div class="cust-left">
+      <div><span class="cust-name">${company}&nbsp;御中</span></div>
+      <div class="intro">下記の通り御見積申し上げます</div>
+      <div class="total-row">
+        <span class="total-label">月額費用御見積金額（税別）：</span>
+        <span class="total-amt">${fmtY(tm)}</span>
+        <span class="total-dash">—</span>
+        <span class="init-tag">${ti > 0
+          ? `初期費用：${fmtY(ti)}`
+          : '初期費用：<span style="color:#16a34a">無　料</span>'
+        }</span>
+      </div>
+    </div>
+    <div class="co-right">
+      <div class="co-logo">
+        <div class="co-c7">CARSEVEN</div>
+        <div class="co-df"><span class="d">DIGI</span><span class="f">FIELD</span></div>
+      </div>
+      株式会社カーセブンデジフィールド<br>
+      〒141-0032<br>東京都品川区大崎2丁目11-1<br>
+      大崎ウィズタワー23階<br>
+      電話番号：03-5436-7735<br>
+      FAX番号：03-5436-7764<br>
+      担当者：${person || '　'}
+    </div>
+  </div>
+
+  <div class="subj">
+    <div><strong>件名：</strong>カーセブンシステム導入につきまして</div>
+    <div style="padding-left:40px">${subSystems}</div>
+  </div>
+
+  ${initSection}
+
+  <h3 class="sec-h">【月額費用】</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:44%">項目</th>
+        <th style="width:10%">数量</th>
+        <th style="width:9%">単位</th>
+        <th style="width:18%">単価</th>
+        <th style="width:19%">金額</th>
+      </tr>
+    </thead>
+    <tbody>${monthRows}</tbody>
+    <tfoot>
+      <tr class="sub">
+        <td colspan="4">小計</td>
+        <td>${fmtY(tm)}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="notes-wrap">
+    <div class="notes-h">補足事項</div>
+    <div class="notes-body">${notesHtml}</div>
+  </div>
+
+</div>
+
+<div class="no-print">
+  <button onclick="window.print()"
+    style="padding:12px 36px;background:#2d6a9f;color:#fff;border:none;border-radius:8px;
+           font-size:14px;font-weight:700;cursor:pointer">
+    🖨&nbsp;PDFとして保存 / 印刷する
+  </button>
+  <p style="margin-top:8px;font-size:12px;color:#6b7280">
+    印刷ダイアログで「PDFに保存」を選択するとPDFダウンロードできます
+  </p>
+</div>
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('ポップアップがブロックされています。許可してから再試行してください。'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+// ──────────────────────────────────────────
+function renderQuoteSingle(storeSections, lawInit, lawMonthly, li, lm, totalInit, totalMonthly) {
+  lastQuoteData = { mode:'single', storeSections, lawInit, lawMonthly, li, lm, totalInit, totalMonthly };
+  const activeCount = storeSections.filter(s => s.iL.length > 0 || s.mL.length > 0).length;
+  document.getElementById('qTotal').innerHTML =
+    `<div style="font-size:11px;opacity:.75;margin-bottom:4px">${activeCount}店舗 合計（税抜）</div>
+     <div><span style="font-size:14px;opacity:.7">初期 </span>${fmt(totalInit)}</div>
+     <div style="font-size:14px;margin-top:2px"><span style="opacity:.7">月額 </span>${fmt(totalMonthly)}<span style="font-size:11px;opacity:.7">/月</span></div>`;
+
+  // Init section
+  let initHtml = '';
+  // Per-store init
+  storeSections.forEach(s => {
+    if (s.iL.length === 0) return;
+    initHtml += `<div class="q-store-label">📍 ${s.name}</div>${s.iL.map(lineHtml).join('')}`;
+  });
+  // Law init
+  if (lawInit.length) {
+    initHtml += `<div class="q-store-label" style="color:#7c3aed">🏢 法人共通（1回のみ）</div>${lawInit.map(lineHtml).join('')}`;
+  }
+
+  // Monthly section
+  let monthHtml = '';
+  storeSections.forEach(s => {
+    if (s.mL.length === 0) return;
+    monthHtml += `<div class="q-store-label">📍 ${s.name} <span style="font-weight:400;color:#9ca3af;font-size:10px">（${fmt(s.sm)}/月）</span></div>${s.mL.map(lineHtml).join('')}`;
+  });
+  if (lawMonthly.length) {
+    monthHtml += `<div class="q-store-label" style="color:#7c3aed">🏢 法人共通</div>${lawMonthly.map(lineHtml).join('')}`;
+  }
+
+  document.getElementById('qBody').innerHTML = `
+    <div class="q-section">
+      <div class="q-section-title">初期費用（一括）</div>
+      ${initHtml || '<div style="color:#9ca3af;font-size:11px">なし</div>'}
+      <div class="q-subtotal"><span>初期合計</span><span class="amt">${fmt(totalInit)}</span></div>
+    </div>
+    <div class="q-section">
+      <div class="q-section-title">月額費用（毎月）</div>
+      ${monthHtml || '<div style="color:#9ca3af;font-size:11px">なし</div>'}
+      <div class="q-subtotal"><span>月額合計</span><span class="amt">${fmt(totalMonthly)}<span style="font-size:11px;font-weight:400;color:#9ca3af">/月</span></span></div>
+    </div>
+    <div class="q-annual">
+      <div class="label">年間概算コスト</div>
+      <div class="val">${fmt(totalInit + totalMonthly*12)}</div>
+      <div class="sub">初期 + 月額×12ヶ月</div>
+    </div>`;
+}
+</script>
+</body>
+</html>
