@@ -360,6 +360,7 @@
       .quote-panel { position: static; }
       .pkg-grid { grid-template-columns: 1fr 1fr; }
     }
+    #cfgPanel.open { display:block !important; }
   </style>
 </head>
 <body>
@@ -446,6 +447,19 @@
       </button>
     </div><!-- /modeSingle -->
 
+    <!-- ─── Config Edit Panel ─── -->
+    <div style="margin-top:16px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden">
+      <button onclick="document.getElementById('cfgPanel').classList.toggle('open')"
+        style="width:100%;padding:10px 14px;background:#f8fafc;border:none;cursor:pointer;text-align:left;font-size:13px;font-weight:600;color:#374151;display:flex;align-items:center;gap:6px">
+        ⚙️ 料金・システム名を編集
+        <span style="margin-left:auto;font-size:10px;color:#9ca3af">▼</span>
+      </button>
+      <div id="cfgPanel" style="display:none;padding:14px;background:#fff;border-top:1px solid #e5e7eb;max-height:400px;overflow-y:auto">
+        <div id="cfgPanelBody"></div>
+        <button onclick="resetCfg()" style="margin-top:10px;font-size:11px;padding:4px 10px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;background:#fff;color:#6b7280">デフォルトに戻す</button>
+      </div>
+    </div>
+
   </div><!-- /config-col -->
 
   <!-- ─── Quote Panel ─── -->
@@ -461,11 +475,9 @@
     </div>
     <button class="btn-print" onclick="window.print()">🖨 印刷する</button>
     <button class="btn-download" onclick="showDownloadModal()">📄 御見積書PDFを作成</button>
-    <div class="note-box">
-      ※ 価格はすべて税抜きです。<br>
-      ※ 従量課金（プロプライシング・抵当調査等）は含みません。<br>
-      ※ 媒体連携は各媒体との個別契約が別途必要です。<br>
-      ※ 見積はあくまで参考値です。詳細はご担当営業にご確認ください。
+    <div class="note-box" id="pdfNotesPreview" style="display:none">
+      <div style="font-size:10px;font-weight:700;color:#92620a;margin-bottom:5px;letter-spacing:.5px">📄 PDF備考欄に表示される内容</div>
+      <div id="pdfNotesBody" style="font-size:11px;line-height:1.8;color:#5c4a00"></div>
     </div>
   </div>
 </div>
@@ -495,28 +507,87 @@
 // ══════════════════════════════════════════
 //  PRICING DATA
 // ══════════════════════════════════════════
-const PACKAGES = {
-  '買取強化': {
-    monthly: 25000, color: '#2d6a9f', desc: '査定・買取契約・振込まで',
-    inc: { e_answer:true, insmart:true, smart_sign_buy:true, smart_sign_sell:false,
-           store_perf:true, media:false, core:false, e_kessai:true }
-  },
-  '販売ライト': {
-    monthly: 25000, color: '#16a34a', desc: '在庫掲載・媒体連携を効率化',
-    inc: { e_answer:true, insmart:true, smart_sign_buy:false, smart_sign_sell:false,
-           store_perf:false, media:true, core:false, e_kessai:false }
-  },
-  '販売強化': {
-    monthly: 50000, color: '#d97706', desc: '販売契約・在庫・媒体連携',
-    inc: { e_answer:true, insmart:true, smart_sign_buy:false, smart_sign_sell:true,
-           store_perf:true, media:true, core:false, e_kessai:false }
-  },
-  'DX': {
-    monthly: 100000, color: '#7c3aed', desc: '全システム連携・完全DX',
-    inc: { e_answer:true, insmart:true, smart_sign_buy:true, smart_sign_sell:true,
-           store_perf:true, media:true, core:true, e_kessai:true }
-  }
+
+// ── 編集可能な設定値（デフォルト値） ──
+let CFG = {
+  // パッケージ月額
+  pkg_kaitori:      25000,
+  pkg_hanbai_l:     25000,
+  pkg_hanbai_s:     50000,
+  pkg_dx:          100000,
+
+  // e-アンサー
+  e_answer_name:    'e-アンサー',
+  e_answer_init:     5000,
+  e_answer_monthly: 10000,
+
+  // インスマートシステム
+  insmart_name:          'インスマートシステム',
+  insmart_id_monthly:     3000,
+  insmart_id_init:        5000,
+  insmart_law_monthly:    2000,
+
+  // coreシステム
+  core_media_name:     'coreシステム（媒体取り込み）',
+  core_nomedia_name:   'coreシステム（取り込み無し）',
+  core_media_init:    100000,
+  core_media_monthly:  50000,
+  core_nomedia_init:   50000,
+  core_nomedia_monthly:30000,
+  core_id_monthly:      2000,
+  core_dx_free_ids:        5,
+
+  // 買取スマートサイン
+  ss_buy_name:     '買取スマートサイン',
+  ss_buy_monthly:   15000,
+  ss_buy_law_init:   5000,
+
+  // 販売スマートサイン
+  ss_sell_name:     '販売スマートサイン',
+  ss_sell_monthly:   15000,
+  ss_sell_law_init:  5000,
+
+  // e-決済
+  e_kessai_name:     'e-決済（振込システム）',
+  e_kessai_monthly:   5000,
+  e_kessai_law_init:  5000,
+
+  // ストアパフォーマンス
+  store_perf_name:     'ストアパフォーマンス',
+  store_perf_monthly:   10000,
+  store_perf_law_init:   5000,
+
+  // アカウント発行費
+  account_init_per_id:  5000,
+  account_pkg_free_ids:    5,
+
+  // 媒体連携
+  media_cs_name:    'カーセンサー',
+  media_cs_monthly:  10000,
+  media_goo_name:   'Goo',
+  media_goo_monthly: 10000,
+  media_as_name:    'オートサーバー',
+  media_as_monthly:   2000,
+  media_onet_name:  'オークネット',
+  media_onet_monthly: 2000,
 };
+
+const CFG_DEFAULT = JSON.parse(JSON.stringify(CFG)); // 起動時に保存
+
+function buildPackages() {
+  return {
+    '買取強化': { monthly: CFG.pkg_kaitori, color:'#2d6a9f', desc:'査定・買取契約・振込まで',
+      inc:{e_answer:true,insmart:true,smart_sign_buy:true,smart_sign_sell:false,store_perf:true,media:false,core:false,e_kessai:true} },
+    '販売ライト': { monthly: CFG.pkg_hanbai_l, color:'#16a34a', desc:'在庫掲載・媒体連携を効率化',
+      inc:{e_answer:true,insmart:true,smart_sign_buy:false,smart_sign_sell:false,store_perf:false,media:true,core:false,e_kessai:false} },
+    '販売強化': { monthly: CFG.pkg_hanbai_s, color:'#d97706', desc:'販売契約・在庫・媒体連携',
+      inc:{e_answer:true,insmart:true,smart_sign_buy:false,smart_sign_sell:true,store_perf:true,media:true,core:false,e_kessai:false} },
+    'DX': { monthly: CFG.pkg_dx, color:'#7c3aed', desc:'全システム連携・完全DX',
+      inc:{e_answer:true,insmart:true,smart_sign_buy:true,smart_sign_sell:true,store_perf:true,media:true,core:true,e_kessai:true} }
+  };
+}
+let PACKAGES = buildPackages();
+
 const PKG_LABELS = {
   e_answer:'e-アンサー', insmart:'インスマート', smart_sign_buy:'買取スマートサイン',
   smart_sign_sell:'販売スマートサイン', store_perf:'ストアパフォーマンス',
@@ -524,22 +595,29 @@ const PKG_LABELS = {
 };
 
 // Per-store systems (used in single mode)
-const SYS = [
-  { key:'e_answer',       name:'e-アンサー',              hint:'初期¥5,000/店舗・月額¥10,000/店舗', hasIDs:false },
-  { key:'insmart',        name:'インスマートシステム',      hint:'初期¥5,000/ID（1ID目無料）・月額¥3,000/ID', hasIDs:true, idDefault:3, idLabel:'ID数' },
-  { key:'core',           name:'coreシステム',             hint:'初期¥50,000〜100,000/店舗・月額¥30,000〜50,000/店舗', hasIDs:true, idDefault:2, idLabel:'ID数', hasType:true },
-  { key:'smart_sign_buy', name:'買取スマートサイン',        hint:'初期¥5,000/法人（1回）・月額¥15,000/店舗', hasIDs:false },
-  { key:'smart_sign_sell',name:'販売スマートサイン',        hint:'初期¥5,000/法人（1回）・月額¥15,000/店舗', hasIDs:false },
-  { key:'e_kessai',       name:'e-決済（振込システム）',   hint:'初期¥5,000/法人（1回）・月額¥5,000/店舗', hasIDs:false },
-  { key:'store_perf',     name:'ストアパフォーマンス',      hint:'初期¥5,000/法人（1回）・月額¥10,000/店舗', hasIDs:false },
-  { key:'media',          name:'媒体連携',                 hint:'月額¥2,000〜¥10,000/店舗（媒体ごと）', hasIDs:false, isMedia:true }
-];
-const MEDIA_LIST = [
-  { key:'cs',   name:'カーセンサー', monthly:10000 },
-  { key:'goo',  name:'Goo',          monthly:10000 },
-  { key:'as',   name:'オートサーバー', monthly:2000 },
-  { key:'onet', name:'オークネット', monthly:2000 }
-];
+function buildSYS() {
+  return [
+    { key:'e_answer',        name: CFG.e_answer_name,     hint:`初期¥${CFG.e_answer_init.toLocaleString()}/店舗・月額¥${CFG.e_answer_monthly.toLocaleString()}/店舗`, hasIDs:false },
+    { key:'insmart',         name: CFG.insmart_name,       hint:`初期¥${CFG.insmart_id_init.toLocaleString()}/ID（1ID目無料）・月額¥${CFG.insmart_id_monthly.toLocaleString()}/ID`, hasIDs:true, idDefault:3, idLabel:'ID数' },
+    { key:'core',            name:'coreシステム',           hint:`初期¥${CFG.core_nomedia_init.toLocaleString()}〜${CFG.core_media_init.toLocaleString()}/店舗・月額¥${CFG.core_nomedia_monthly.toLocaleString()}〜${CFG.core_media_monthly.toLocaleString()}/店舗`, hasIDs:true, idDefault:2, idLabel:'ID数', hasType:true },
+    { key:'smart_sign_buy',  name: CFG.ss_buy_name,        hint:`初期¥${CFG.ss_buy_law_init.toLocaleString()}/法人（1回）・月額¥${CFG.ss_buy_monthly.toLocaleString()}/店舗`, hasIDs:false },
+    { key:'smart_sign_sell', name: CFG.ss_sell_name,       hint:`初期¥${CFG.ss_sell_law_init.toLocaleString()}/法人（1回）・月額¥${CFG.ss_sell_monthly.toLocaleString()}/店舗`, hasIDs:false },
+    { key:'e_kessai',        name: CFG.e_kessai_name,      hint:`初期¥${CFG.e_kessai_law_init.toLocaleString()}/法人（1回）・月額¥${CFG.e_kessai_monthly.toLocaleString()}/店舗`, hasIDs:false },
+    { key:'store_perf',      name: CFG.store_perf_name,    hint:`初期¥${CFG.store_perf_law_init.toLocaleString()}/法人（1回）・月額¥${CFG.store_perf_monthly.toLocaleString()}/店舗`, hasIDs:false },
+    { key:'media',           name:'媒体連携',               hint:'月額¥2,000〜¥10,000/店舗（媒体ごと）', hasIDs:false, isMedia:true }
+  ];
+}
+let SYS = buildSYS();
+
+function buildMediaList() {
+  return [
+    { key:'cs',   name: CFG.media_cs_name,   monthly: CFG.media_cs_monthly },
+    { key:'goo',  name: CFG.media_goo_name,  monthly: CFG.media_goo_monthly },
+    { key:'as',   name: CFG.media_as_name,   monthly: CFG.media_as_monthly },
+    { key:'onet', name: CFG.media_onet_name, monthly: CFG.media_onet_monthly },
+  ];
+}
+let MEDIA_LIST = buildMediaList();
 
 // ══════════════════════════════════════════
 //  STATE
@@ -610,11 +688,125 @@ function makeStore(num) {
 let stores = [makeStore(1)];
 
 // ══════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════
+function applyConfig() {
+  PACKAGES = buildPackages();
+  SYS = buildSYS();
+  MEDIA_LIST = buildMediaList();
+  SYS_MON_MAP = buildSysMonMap();
+  renderPkgStores();
+  renderStores();
+  calc();
+}
+
+function setCfg(key, input) {
+  const val = input.type === 'text' ? input.value : (parseInt(input.value) || 0);
+  CFG[key] = val;
+  applyConfig();
+}
+
+function resetCfg() {
+  CFG = JSON.parse(JSON.stringify(CFG_DEFAULT));
+  applyConfig();
+  renderCfgPanel();
+}
+
+function renderCfgPanel() {
+  const sections = [
+    { label:'📦 パッケージ月額', rows:[
+      { key:'pkg_kaitori',  label:'買取強化', type:'price' },
+      { key:'pkg_hanbai_l', label:'販売ライト', type:'price' },
+      { key:'pkg_hanbai_s', label:'販売強化', type:'price' },
+      { key:'pkg_dx',       label:'DX', type:'price' },
+    ]},
+    { label:'🔧 e-アンサー', rows:[
+      { key:'e_answer_name',    label:'システム名', type:'text' },
+      { key:'e_answer_init',    label:'初期費用/店舗', type:'price' },
+      { key:'e_answer_monthly', label:'月額/店舗', type:'price' },
+    ]},
+    { label:'🔧 インスマートシステム', rows:[
+      { key:'insmart_name',        label:'システム名', type:'text' },
+      { key:'insmart_id_monthly',  label:'月額/ID', type:'price' },
+      { key:'insmart_id_init',     label:'初期費用/ID', type:'price' },
+      { key:'insmart_law_monthly', label:'基本月額（法人）', type:'price' },
+    ]},
+    { label:'🔧 coreシステム', rows:[
+      { key:'core_media_name',     label:'名称（媒体取り込み）', type:'text' },
+      { key:'core_media_init',     label:'初期費用（媒体）', type:'price' },
+      { key:'core_media_monthly',  label:'月額（媒体）', type:'price' },
+      { key:'core_nomedia_name',   label:'名称（取り込み無し）', type:'text' },
+      { key:'core_nomedia_init',   label:'初期費用（取り込み無し）', type:'price' },
+      { key:'core_nomedia_monthly',label:'月額（取り込み無し）', type:'price' },
+      { key:'core_id_monthly',     label:'月額/ID', type:'price' },
+      { key:'core_dx_free_ids',    label:'DX無料ID数', type:'number' },
+    ]},
+    { label:'🔧 買取スマートサイン', rows:[
+      { key:'ss_buy_name',     label:'システム名', type:'text' },
+      { key:'ss_buy_monthly',  label:'月額/店舗', type:'price' },
+      { key:'ss_buy_law_init', label:'初期費用（法人）', type:'price' },
+    ]},
+    { label:'🔧 販売スマートサイン', rows:[
+      { key:'ss_sell_name',     label:'システム名', type:'text' },
+      { key:'ss_sell_monthly',  label:'月額/店舗', type:'price' },
+      { key:'ss_sell_law_init', label:'初期費用（法人）', type:'price' },
+    ]},
+    { label:'🔧 e-決済（振込システム）', rows:[
+      { key:'e_kessai_name',     label:'システム名', type:'text' },
+      { key:'e_kessai_monthly',  label:'月額/店舗', type:'price' },
+      { key:'e_kessai_law_init', label:'初期費用（法人）', type:'price' },
+    ]},
+    { label:'🔧 ストアパフォーマンス', rows:[
+      { key:'store_perf_name',     label:'システム名', type:'text' },
+      { key:'store_perf_monthly',  label:'月額/店舗', type:'price' },
+      { key:'store_perf_law_init', label:'初期費用（法人）', type:'price' },
+    ]},
+    { label:'👤 アカウント発行費', rows:[
+      { key:'account_init_per_id',  label:'発行費/ID', type:'price' },
+      { key:'account_pkg_free_ids', label:'パッケージ無料ID数', type:'number' },
+    ]},
+    { label:'📡 媒体連携', rows:[
+      { key:'media_cs_name',    label:'CS名称', type:'text' },
+      { key:'media_cs_monthly', label:'CS月額', type:'price' },
+      { key:'media_goo_name',    label:'Goo名称', type:'text' },
+      { key:'media_goo_monthly', label:'Goo月額', type:'price' },
+      { key:'media_as_name',    label:'AS名称', type:'text' },
+      { key:'media_as_monthly', label:'AS月額', type:'price' },
+      { key:'media_onet_name',    label:'オークネット名称', type:'text' },
+      { key:'media_onet_monthly', label:'オークネット月額', type:'price' },
+    ]},
+  ];
+
+  let html = '';
+  sections.forEach(sec => {
+    html += `<div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:#6b7280;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #f3f4f6">${sec.label}</div>`;
+    sec.rows.forEach(row => {
+      const val = CFG[row.key];
+      const inputType = row.type === 'text' ? 'text' : 'number';
+      const step = row.type === 'price' ? '100' : '1';
+      html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+        <span style="font-size:11px;color:#374151;flex:1;min-width:130px">${row.label}</span>
+        ${row.type === 'price' ? '<span style="font-size:11px;color:#6b7280">¥</span>' : ''}
+        <input type="${inputType}" value="${val}" step="${step}" data-cfg-key="${row.key}"
+          oninput="setCfg('${row.key}', this)"
+          style="width:${row.type==='text'?'160':'90'}px;padding:3px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;text-align:${row.type==='text'?'left':'right'}">
+      </div>`;
+    });
+    html += '</div>';
+  });
+
+  const cfgBody = document.getElementById('cfgPanelBody');
+  if (cfgBody) cfgBody.innerHTML = html;
+}
+
+// ══════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════
 window.onload = () => {
   renderPkgStores();
   renderStores();
+  renderCfgPanel();
 };
 
 function setMode(m) {
@@ -629,10 +821,16 @@ function setMode(m) {
 // ══════════════════════════════════════════
 //  PACKAGE MODE – STORE RENDERING
 // ══════════════════════════════════════════
-const SYS_MON_MAP = {
-  e_answer:10000, smart_sign_buy:15000, smart_sign_sell:15000,
-  e_kessai:5000, store_perf:10000
-};
+function buildSysMonMap() {
+  return {
+    e_answer: CFG.e_answer_monthly,
+    smart_sign_buy: CFG.ss_buy_monthly,
+    smart_sign_sell: CFG.ss_sell_monthly,
+    e_kessai: CFG.e_kessai_monthly,
+    store_perf: CFG.store_perf_monthly,
+  };
+}
+let SYS_MON_MAP = buildSysMonMap();
 
 function renderPkgStores() {
   const list = document.getElementById('pkgStoreList');
@@ -1277,6 +1475,45 @@ function fmt(n) { return '¥' + n.toLocaleString(); }
 function calc() {
   if (mode === 'pkg') calcPackage();
   else calcSingle();
+  updateNoteBoxPreview();
+}
+
+// PDF備考欄のプレビューをnote-boxに表示
+function updateNoteBoxPreview() {
+  const preview = document.getElementById('pdfNotesPreview');
+  const body    = document.getElementById('pdfNotesBody');
+  if (!preview || !body || !lastQuoteData) { if(preview) preview.style.display='none'; return; }
+
+  const q = lastQuoteData;
+  const allML = q.storeSections ? q.storeSections.flatMap(ss => ss.mL||[]) : (q.storeSections||[]);
+  const allIL = q.iL || [];
+  const allNames = [...allIL, ...allML].map(l => l.n).join(' ');
+
+  const isPkg = q.mode === 'pkg';
+  const hasSSSell = allNames.includes('販売スマートサイン')
+    || (isPkg && q.storeSections.some(ss => ss.type==='pkg' && PACKAGES[ss.pkg]?.inc?.smart_sign_sell));
+  const hasSSBuyOrCore = allNames.includes('買取スマートサイン') || allNames.includes('coreシステム')
+    || (isPkg && q.storeSections.some(ss =>
+        ss.type==='pkg' && (PACKAGES[ss.pkg]?.inc?.smart_sign_buy || PACKAGES[ss.pkg]?.inc?.core)));
+  const hasMedia    = allNames.includes('媒体連携') || MEDIA_LIST.some(m => allNames.includes(m.name));
+  const hasStorPerf = allNames.includes('ストアパフォーマンス');
+
+  const lines = [];
+  if (isPkg) {
+    lines.push('各システムのアカウント発行費は1IDにつき ¥5,000（パッケージはインスマート5IDまで無料、6ID目以降 ¥5,000/ID）。');
+  } else {
+    lines.push('各システムのアカウント発行費は1IDにつき ¥5,000（インスマートのみ1ID目無料）。');
+  }
+  if (hasSSBuyOrCore) lines.push('SMS送信には1件につき70文字以内25円、70文字の25円に加え、70文字以降の66文字ごとに25円かかります。');
+  if (hasSSSell)      lines.push('販売スマートサインは JOCAR連携が必須。別途 JCM社へのオプション申込が必要です。');
+  if (hasStorPerf)    lines.push('ストアパフォーマンスは JOCARとの連携が必須。別途 JCM社のご契約が必要です。');
+  if (hasMedia)       lines.push('媒体連携はすべて各媒体との個別契約が必要です。');
+  lines.push('12カ月毎の更新となります。');
+  lines.push('※御見積金額に消費税は含まれておりません。');
+  lines.push('※御見積有効期限は発行日より2週間となります。');
+
+  body.innerHTML = lines.map(l => `・${l}`).join('<br>');
+  preview.style.display = 'block';
 }
 
 // ──────────────────────────────────────────
@@ -1310,21 +1547,21 @@ function calcPackage() {
       sml.push({ n:`${ps.pkg}パッケージ`, a: pkg.monthly });
       sm += pkg.monthly;
 
-      const extraIDs = Math.max(0, ps.insmart_ids - 5);
+      const extraIDs = Math.max(0, ps.insmart_ids - CFG.account_pkg_free_ids);
       if (extraIDs > 0) {
-        sml.push({ n:`インスマートシステム 追加ID × ${extraIDs}ID`, a: extraIDs * 3000 });
-        sm += extraIDs * 3000;
+        sml.push({ n:`インスマートシステム 追加ID × ${extraIDs}ID`, a: extraIDs * CFG.insmart_id_monthly });
+        sm += extraIDs * CFG.insmart_id_monthly;
       }
 
       if (ps.pkg === 'DX') {
-        // coreシステムはDXパッケージ込み。5IDまで無料、6ID目以降¥2,000/ID月額
-        const coreExtra = Math.max(0, ps.core_ids - 5);
+        // coreシステムはDXパッケージ込み。CFG.core_dx_free_idsまで無料、その後¥CFG.core_id_monthly/ID月額
+        const coreExtra = Math.max(0, ps.core_ids - CFG.core_dx_free_ids);
         if (coreExtra > 0) {
-          const cMon = 2000 * coreExtra;
+          const cMon = CFG.core_id_monthly * coreExtra;
           sml.push({ n:`coreシステム 追加ID × ${coreExtra}ID`, a: cMon });
           sm += cMon;
         }
-        sml.push({ n:`coreシステム ${Math.min(ps.core_ids,5)}ID（パッケージ込み・無料）`, a:0, inc:true });
+        sml.push({ n:`coreシステム ${Math.min(ps.core_ids, CFG.core_dx_free_ids)}ID（パッケージ込み・無料）`, a:0, inc:true });
       }
 
       SYS.filter(s => !pkg.inc[s.key] && s.key !== 'insmart').forEach(s => {
@@ -1335,10 +1572,10 @@ function calcPackage() {
         } else if (s.key === 'core') {
           if (ps.addon_core) {
             const ci = ps.addon_core_type === 'media'
-              ? { n:'coreシステム（媒体取り込み）', monthly: 50000 }
-              : { n:'coreシステム（取り込み無し）', monthly: 30000 };
+              ? { n: CFG.core_media_name, monthly: CFG.core_media_monthly }
+              : { n: CFG.core_nomedia_name, monthly: CFG.core_nomedia_monthly };
             sml.push({ n:ci.n, a:ci.monthly }); sm += ci.monthly;
-            sml.push({ n:`coreシステム ID × ${ps.addon_core_ids}ID`, a:2000*ps.addon_core_ids }); sm += 2000*ps.addon_core_ids;
+            sml.push({ n:`coreシステム ID × ${ps.addon_core_ids}ID`, a: CFG.core_id_monthly * ps.addon_core_ids }); sm += CFG.core_id_monthly * ps.addon_core_ids;
           }
         } else {
           if (ps[`addon_${s.key}`]) {
@@ -1361,12 +1598,12 @@ function calcPackage() {
         initShown.add(ps.pkg);
         iL.push({ n:`${ps.pkg}パッケージ システム初期費用（パッケージ込み）`, a:0, free:true });
       }
-      const accExtra = Math.max(0, ps.account_ids - 5);
+      const accExtra = Math.max(0, ps.account_ids - CFG.account_pkg_free_ids);
       if (accExtra > 0) {
-        const a = accExtra * 5000 * mult;
-        iL.push({ n:`アカウント発行費 × ${accExtra * mult}ID（${ps.name}・6ID目以降）`, a }); ti += a;
+        const a = accExtra * CFG.account_init_per_id * mult;
+        iL.push({ n:`アカウント発行費 × ${accExtra * mult}ID（${ps.name}・${CFG.account_pkg_free_ids + 1}ID目以降）`, a }); ti += a;
       } else {
-        iL.push({ n:`アカウント発行費（${ps.name}・${ps.account_ids}ID・5IDまで無料）`, a:0, free:true });
+        iL.push({ n:`アカウント発行費（${ps.name}・${ps.account_ids}ID・${CFG.account_pkg_free_ids}IDまで無料）`, a:0, free:true });
       }
 
     } else {
@@ -1377,37 +1614,37 @@ function calcPackage() {
       let sm = 0;
 
       if (ps.c_e_answer) {
-        siL.push({ n:'e-アンサー 初期', a:5000 });
-        sml.push({ n:'e-アンサー 月額', a:10000 }); sm += 10000;
+        siL.push({ n: CFG.e_answer_name + ' 初期', a: CFG.e_answer_init });
+        sml.push({ n: CFG.e_answer_name + ' 月額', a: CFG.e_answer_monthly }); sm += CFG.e_answer_monthly;
       }
       if (ps.c_insmart) {
         cAnyInsmart = true;
-        const mID = 3000 * ps.c_insmart_ids;
-        sml.push({ n:`インスマートシステム ${ps.c_insmart_ids}ID × ¥3,000`, a:mID }); sm += mID;
+        const mID = CFG.insmart_id_monthly * ps.c_insmart_ids;
+        sml.push({ n:`${CFG.insmart_name} ${ps.c_insmart_ids}ID × ¥${CFG.insmart_id_monthly.toLocaleString()}`, a:mID }); sm += mID;
       }
       if (ps.c_core) {
         const ci = ps.c_core_type === 'media'
-          ? { n:'coreシステム（媒体取り込み）', init:100000, mon:50000 }
-          : { n:'coreシステム（取り込み無し）', init:50000, mon:30000 };
+          ? { n: CFG.core_media_name, init: CFG.core_media_init, mon: CFG.core_media_monthly }
+          : { n: CFG.core_nomedia_name, init: CFG.core_nomedia_init, mon: CFG.core_nomedia_monthly };
         siL.push({ n:`${ci.n} 初期`, a:ci.init });
         sml.push({ n:ci.n, a:ci.mon }); sm += ci.mon;
-        sml.push({ n:`coreシステム ID × ${ps.c_core_ids}ID`, a:2000*ps.c_core_ids }); sm += 2000*ps.c_core_ids;
+        sml.push({ n:`coreシステム ID × ${ps.c_core_ids}ID`, a: CFG.core_id_monthly * ps.c_core_ids }); sm += CFG.core_id_monthly * ps.c_core_ids;
       }
-      if (ps.c_smart_sign_buy)  { cAnySSBuy=true;   sml.push({ n:'買取スマートサイン', a:15000 }); sm+=15000; }
-      if (ps.c_smart_sign_sell) { cAnySSSell=true;  sml.push({ n:'販売スマートサイン', a:15000 }); sm+=15000; }
-      if (ps.c_e_kessai)        { cAnyEKessai=true; sml.push({ n:'e-決済（振込システム）', a:5000 }); sm+=5000; }
-      if (ps.c_store_perf)      { cAnyStorPerf=true;sml.push({ n:'ストアパフォーマンス', a:10000 }); sm+=10000; }
+      if (ps.c_smart_sign_buy)  { cAnySSBuy=true;   sml.push({ n: CFG.ss_buy_name, a: CFG.ss_buy_monthly }); sm+= CFG.ss_buy_monthly; }
+      if (ps.c_smart_sign_sell) { cAnySSSell=true;  sml.push({ n: CFG.ss_sell_name, a: CFG.ss_sell_monthly }); sm+= CFG.ss_sell_monthly; }
+      if (ps.c_e_kessai)        { cAnyEKessai=true; sml.push({ n: CFG.e_kessai_name, a: CFG.e_kessai_monthly }); sm+= CFG.e_kessai_monthly; }
+      if (ps.c_store_perf)      { cAnyStorPerf=true;sml.push({ n: CFG.store_perf_name, a: CFG.store_perf_monthly }); sm+= CFG.store_perf_monthly; }
       MEDIA_LIST.forEach(m => {
         if (ps.c_media[m.key]) { sml.push({ n:m.name, a:m.monthly }); sm += m.monthly; }
       });
 
-      // アカウント発行費（カスタム店舗：全システム共通アカウント数で計算、5IDまで無料）
+      // アカウント発行費（カスタム店舗：全システム共通アカウント数で計算、CFG.account_pkg_free_idsまで無料）
       const accIds = ps.c_account_ids;
-      const accExtra = Math.max(0, accIds - 5);
+      const accExtra = Math.max(0, accIds - CFG.account_pkg_free_ids);
       if (accExtra > 0) {
-        siL.push({ n:`アカウント発行費 × ${accExtra}ID（6ID目以降）`, a: accExtra * 5000 });
+        siL.push({ n:`アカウント発行費 × ${accExtra}ID（${CFG.account_pkg_free_ids + 1}ID目以降）`, a: accExtra * CFG.account_init_per_id });
       } else {
-        siL.push({ n:`アカウント発行費（${accIds}ID・5IDまで無料）`, a:0, free:true });
+        siL.push({ n:`アカウント発行費（${accIds}ID・${CFG.account_pkg_free_ids}IDまで無料）`, a:0, free:true });
       }
 
       // Per-store init fees go into main iL with store name prefix（mult倍）
@@ -1426,12 +1663,12 @@ function calcPackage() {
   const lawML = [], lawIL = [];
   let lm = 0;
   if (cAnyInsmart) {
-    lawML.push({ n:'インスマートシステム 基本（法人）', a:2000 }); lm += 2000;
+    lawML.push({ n: CFG.insmart_name + ' 基本（法人）', a: CFG.insmart_law_monthly }); lm += CFG.insmart_law_monthly;
   }
-  if (cAnySSBuy)    lawIL.push({ n:'買取スマートサイン 初期（法人）',      a:5000 });
-  if (cAnySSSell)   lawIL.push({ n:'販売スマートサイン 初期（法人）',      a:5000 });
-  if (cAnyEKessai)  lawIL.push({ n:'e-決済（振込システム）初期（法人）',   a:5000 });
-  if (cAnyStorPerf) lawIL.push({ n:'ストアパフォーマンス 初期（法人）',    a:5000 });
+  if (cAnySSBuy)    lawIL.push({ n: CFG.ss_buy_name + ' 初期（法人）',      a: CFG.ss_buy_law_init });
+  if (cAnySSSell)   lawIL.push({ n: CFG.ss_sell_name + ' 初期（法人）',      a: CFG.ss_sell_law_init });
+  if (cAnyEKessai)  lawIL.push({ n: CFG.e_kessai_name + '初期（法人）',   a: CFG.e_kessai_law_init });
+  if (cAnyStorPerf) lawIL.push({ n: CFG.store_perf_name + ' 初期（法人）',    a: CFG.store_perf_law_init });
   lawIL.forEach(l => { iL.push(l); if (!l.free) ti += l.a; });
   tm += lm;
   if (lawML.length > 0 || lawIL.length > 0) {
@@ -1464,27 +1701,27 @@ function calcSingle() {
     let si=0, sm=0;
 
     if (st.e_answer) {
-      iL.push({ n:'e-アンサー 初期', a:5000 }); si+=5000;
-      mL.push({ n:'e-アンサー 月額', a:10000 }); sm+=10000;
+      iL.push({ n: CFG.e_answer_name + ' 初期', a: CFG.e_answer_init }); si+= CFG.e_answer_init;
+      mL.push({ n: CFG.e_answer_name + ' 月額', a: CFG.e_answer_monthly }); sm+= CFG.e_answer_monthly;
     }
     if (st.insmart) {
       anyInsmart = true;
       totalInsmartIDs += st.insmart_ids * mult;
-      const mID = 3000 * st.insmart_ids;
-      mL.push({ n:`インスマートシステム ${st.insmart_ids}ID × ¥3,000`, a:mID }); sm+=mID;
+      const mID = CFG.insmart_id_monthly * st.insmart_ids;
+      mL.push({ n:`${CFG.insmart_name} ${st.insmart_ids}ID × ¥${CFG.insmart_id_monthly.toLocaleString()}`, a:mID }); sm+=mID;
     }
     if (st.core) {
       const ci = st.core_type==='media'
-        ? { n:'coreシステム（媒体取り込み）', init:100000, mon:50000 }
-        : { n:'coreシステム（取り込み無し）', init:50000, mon:30000 };
+        ? { n: CFG.core_media_name, init: CFG.core_media_init, mon: CFG.core_media_monthly }
+        : { n: CFG.core_nomedia_name, init: CFG.core_nomedia_init, mon: CFG.core_nomedia_monthly };
       iL.push({ n:`${ci.n} 初期`, a:ci.init }); si+=ci.init;
       mL.push({ n:ci.n, a:ci.mon }); sm+=ci.mon;
-      mL.push({ n:`coreシステム ID × ${st.core_ids}ID`, a:2000*st.core_ids }); sm+=2000*st.core_ids;
+      mL.push({ n:`coreシステム ID × ${st.core_ids}ID`, a: CFG.core_id_monthly * st.core_ids }); sm+= CFG.core_id_monthly * st.core_ids;
     }
-    if (st.smart_sign_buy)  { anySSBuy=true;   mL.push({ n:'買取スマートサイン', a:15000 }); sm+=15000; }
-    if (st.smart_sign_sell) { anySSSell=true;  mL.push({ n:'販売スマートサイン', a:15000 }); sm+=15000; }
-    if (st.e_kessai)        { anyEKessai=true; mL.push({ n:'e-決済（振込システム）', a:5000 }); sm+=5000; }
-    if (st.store_perf)      { anyStorPerf=true;mL.push({ n:'ストアパフォーマンス', a:10000 }); sm+=10000; }
+    if (st.smart_sign_buy)  { anySSBuy=true;   mL.push({ n: CFG.ss_buy_name, a: CFG.ss_buy_monthly }); sm+= CFG.ss_buy_monthly; }
+    if (st.smart_sign_sell) { anySSSell=true;  mL.push({ n: CFG.ss_sell_name, a: CFG.ss_sell_monthly }); sm+= CFG.ss_sell_monthly; }
+    if (st.e_kessai)        { anyEKessai=true; mL.push({ n: CFG.e_kessai_name, a: CFG.e_kessai_monthly }); sm+= CFG.e_kessai_monthly; }
+    if (st.store_perf)      { anyStorPerf=true;mL.push({ n: CFG.store_perf_name, a: CFG.store_perf_monthly }); sm+= CFG.store_perf_monthly; }
     if (st.media) {
       MEDIA_LIST.forEach(m => {
         if (st.media[m.key]) { mL.push({ n:m.name, a:m.monthly }); sm+=m.monthly; }
@@ -1503,13 +1740,13 @@ function calcSingle() {
   let li=0, lm=0;
 
   if (anyInsmart) {
-    lawMonthly.push({ n:'インスマートシステム 基本（法人）', a:2000 }); lm+=2000;
+    lawMonthly.push({ n: CFG.insmart_name + ' 基本（法人）', a: CFG.insmart_law_monthly }); lm+= CFG.insmart_law_monthly;
   }
   // 法人単位の初期費用（各システム1回のみ）
-  if (anySSBuy)    { lawInit.push({ n:'買取スマートサイン 初期（法人）', a:5000 }); li+=5000; }
-  if (anySSSell)   { lawInit.push({ n:'販売スマートサイン 初期（法人）', a:5000 }); li+=5000; }
-  if (anyEKessai)  { lawInit.push({ n:'e-決済（振込システム）初期（法人）', a:5000 }); li+=5000; }
-  if (anyStorPerf) { lawInit.push({ n:'ストアパフォーマンス 初期（法人）', a:5000 }); li+=5000; }
+  if (anySSBuy)    { lawInit.push({ n: CFG.ss_buy_name + ' 初期（法人）', a: CFG.ss_buy_law_init }); li+= CFG.ss_buy_law_init; }
+  if (anySSSell)   { lawInit.push({ n: CFG.ss_sell_name + ' 初期（法人）', a: CFG.ss_sell_law_init }); li+= CFG.ss_sell_law_init; }
+  if (anyEKessai)  { lawInit.push({ n: CFG.e_kessai_name + '初期（法人）', a: CFG.e_kessai_law_init }); li+= CFG.e_kessai_law_init; }
+  if (anyStorPerf) { lawInit.push({ n: CFG.store_perf_name + ' 初期（法人）', a: CFG.store_perf_law_init }); li+= CFG.store_perf_law_init; }
 
   // アカウント発行費：インスマート使用時はID数から算出、未使用時は手動入力値を使用
   const accountFeeCount = anyInsmart
@@ -1517,7 +1754,7 @@ function calcSingle() {
     : singleAccountCount;
 
   if (accountFeeCount > 0) {
-    const feeAmt = accountFeeCount * 5000;
+    const feeAmt = accountFeeCount * CFG.account_init_per_id;
     lawInit.push({ n:`アカウント発行費 × ${accountFeeCount}ID`, a: feeAmt }); li += feeAmt;
   } else if (anyInsmart && totalInsmartIDs === 1) {
     // インスマート1IDのみ（1ID目無料）
@@ -1826,7 +2063,11 @@ function openQuoteWindow(company, person) {
 
   // ── Conditional 補足事項 ──
   const allNames = [...iL, ...mL].map(l => l.n).join(' ');
-  const hasSSSell    = allNames.includes('販売スマートサイン');
+  const hasSSSell    = allNames.includes('販売スマートサイン')
+    || (q.mode==='pkg' && q.storeSections.some(ss => ss.type==='pkg' && PACKAGES[ss.pkg]?.inc?.smart_sign_sell));
+  const hasSSBuyOrCore = allNames.includes('買取スマートサイン') || allNames.includes('coreシステム')
+    || (q.mode==='pkg' && q.storeSections.some(ss =>
+        ss.type==='pkg' && (PACKAGES[ss.pkg]?.inc?.smart_sign_buy || PACKAGES[ss.pkg]?.inc?.core)));
   const hasMedia     = allNames.includes('媒体連携') || MEDIA_LIST.some(m => allNames.includes(m.name));
   const hasStorPerf  = allNames.includes('ストアパフォーマンス');
 
@@ -1837,12 +2078,13 @@ function openQuoteWindow(company, person) {
   } else {
     notesLines.push('各システムのアカウント発行費は1IDにつき ¥5,000 がかかります（インスマートシステムのみ1ID目無料）。');
   }
-  notesLines.push('各システムは 12カ月毎の更新となります。');
+  if (hasSSBuyOrCore) notesLines.push('SMS送信には1件につき70文字以内25円、70文字の25円に加え、70文字以降の66文字ごとに25円かかります。');
   if (hasSSSell)   notesLines.push('販売スマートサインは JOCAR連携が必須となり、別途 JCM社へのオプション申込が必要となります。');
   if (hasStorPerf) notesLines.push('ストアパフォーマンス（業績管理システム）は JOCARとの連携が必須です。別途 JCM社のご契約が必要となります。');
   if (hasMedia)    notesLines.push('媒体連携はすべて各媒体との個別契約が必要です。');
-  notesLines.push('御見積金額に消費税は含まれておりません。');
-  notesLines.push('御見積有効期限は発行日より 2週間となります。');
+  notesLines.push('12カ月毎の更新となります。');
+  notesLines.push('※御見積金額に消費税は含まれておりません。');
+  notesLines.push('※御見積有効期限は発行日より2週間となります。');
   const notesHtml = notesLines.join('<br>');
 
   // Build table HTML strings
