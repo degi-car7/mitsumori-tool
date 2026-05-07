@@ -671,6 +671,7 @@ function makeStore(num) {
   return {
     id: storeIdCounter++,
     name: `店舗${num}`,
+    showName: true,       // 店舗名を表示するか
     open: true,
     storeMultiplier: 1,   // 同じ設定の店舗数（×N店舗）
     // systems
@@ -1272,18 +1273,12 @@ function renderStores() {
 function updateAccountPanel() {
   const hasInsmart = stores.some(st => st.insmart);
   const ctrl = document.getElementById('accountFeeCtrl');
-  const auto = document.getElementById('accountFeeAuto');
   const hint = document.getElementById('accountFeeHint');
-  if (!ctrl || !auto) return;
-  if (hasInsmart) {
-    ctrl.style.display = 'none';
-    auto.style.display = 'block';
-    if (hint) hint.textContent = 'インスマートシステムのID数から自動計算（1ID目無料）';
-  } else {
-    ctrl.style.display = 'flex';
-    auto.style.display = 'none';
-    if (hint) hint.textContent = 'システムを利用するユーザー数（アカウント発行費 ¥5,000/ID）';
-  }
+  if (!ctrl) return;
+  ctrl.style.display = 'flex';
+  if (hint) hint.textContent = hasInsmart
+    ? 'システムを利用するユーザー数（アカウント発行費 ¥5,000/ID・インスマート利用時1ID目無料）'
+    : 'システムを利用するユーザー数（アカウント発行費 ¥5,000/ID）';
 }
 
 function setSingleAccountCount(val) {
@@ -1362,10 +1357,16 @@ function renderStoreCard(st, idx) {
     <div class="store-card" id="storeCard${st.id}">
       <div class="store-header" onclick="toggleStore(${st.id})">
         <div class="store-num">${idx+1}</div>
-        <input class="store-name-input" type="text" value="${st.name}"
-          onclick="event.stopPropagation()"
-          oninput="setStore(${st.id},'name',this.value)"
-          placeholder="店舗名を入力">
+        ${st.showName !== false ? `
+          <input class="store-name-input" type="text" value="${st.name}"
+            onclick="event.stopPropagation()"
+            oninput="setStore(${st.id},'name',this.value)"
+            placeholder="店舗名を入力">` :
+          `<span style="font-size:12px;color:#9ca3af;padding:2px 8px;font-style:italic">名称なし</span>`}
+        <button onclick="event.stopPropagation();toggleStoreName(${st.id})"
+          style="font-size:10px;padding:2px 7px;border:1px solid #d1d5db;border-radius:4px;background:${st.showName!==false?'#fff':'#e0e7ff'};color:${st.showName!==false?'#6b7280':'#4338ca'};cursor:pointer;white-space:nowrap">
+          ${st.showName !== false ? '名称なし' : '名称あり'}
+        </button>
         ${hasSys ? `<span style="font-size:10px;background:#dcfce7;color:#16a34a;padding:2px 7px;border-radius:20px;white-space:nowrap;font-weight:600">✓ 設定済み</span>` : `<span style="font-size:10px;color:#9ca3af;padding:2px 7px;white-space:nowrap">未設定</span>`}
         <div onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;margin-left:4px">
           <span style="font-size:11px;color:#64748b;white-space:nowrap">×</span>
@@ -1400,6 +1401,14 @@ function addStore() {
 function removeStore(id) {
   if (stores.length <= 1) return;
   stores = stores.filter(s => s.id !== id);
+  renderStores();
+  calc();
+}
+
+function toggleStoreName(id) {
+  const st = stores.find(s => s.id === id);
+  if (!st) return;
+  st.showName = st.showName === false ? true : false;
   renderStores();
   calc();
 }
@@ -1731,8 +1740,8 @@ function calcSingle() {
     // mult倍にして合計に加算
     totalInit    += si * mult;
     totalMonthly += sm * mult;
-    storeSections.push({ name: mult > 1 ? `${st.name}（×${mult}店舗）` : st.name,
-      iL, mL, si, sm, mult });
+    const displayName = st.showName === false ? '' : (mult > 1 ? `${st.name}（×${mult}店舗）` : st.name);
+    storeSections.push({ name: displayName, iL, mL, si, sm, mult });
   });
 
   // Law-level fees (charged once per 法人)
@@ -1748,17 +1757,17 @@ function calcSingle() {
   if (anyEKessai)  { lawInit.push({ n: CFG.e_kessai_name + '初期（法人）', a: CFG.e_kessai_law_init }); li+= CFG.e_kessai_law_init; }
   if (anyStorPerf) { lawInit.push({ n: CFG.store_perf_name + ' 初期（法人）', a: CFG.store_perf_law_init }); li+= CFG.store_perf_law_init; }
 
-  // アカウント発行費：インスマート使用時はID数から算出、未使用時は手動入力値を使用
-  const accountFeeCount = anyInsmart
-    ? Math.max(0, totalInsmartIDs - 1)  // インスマート1ID目は無料
-    : singleAccountCount;
+  // アカウント発行費：常に「アカウント数」欄の値を使用
+  // インスマート利用時は1ID目無料、未利用時は全ID課金
+  const freeIds = anyInsmart ? 1 : 0;
+  const accountFeeCount = Math.max(0, singleAccountCount - freeIds);
 
   if (accountFeeCount > 0) {
     const feeAmt = accountFeeCount * CFG.account_init_per_id;
     lawInit.push({ n:`アカウント発行費 × ${accountFeeCount}ID`, a: feeAmt }); li += feeAmt;
-  } else if (anyInsmart && totalInsmartIDs === 1) {
-    // インスマート1IDのみ（1ID目無料）
-    lawInit.push({ n:'アカウント発行費（1ID目無料）', a:0, free:true });
+  } else {
+    // 全額無料（インスマート利用かつアカウント数1の場合）
+    lawInit.push({ n:`アカウント発行費（${singleAccountCount}ID・1ID目無料）`, a:0, free:true });
   }
 
   totalInit     += li;
@@ -2009,6 +2018,24 @@ function buildTableRows(lines, skipFreeInc = false) {
   }).join('');
 }
 
+// 月額明細をシステム種別順に並べるためのソートキー
+function sysLineOrder(name) {
+  const order = [
+    'e-アンサー',
+    CFG.insmart_name, 'インスマート',   // 法人基本もここに
+    CFG.core_media_name, CFG.core_nomedia_name, 'coreシステム',
+    CFG.ss_buy_name,  '買取スマートサイン',
+    CFG.ss_sell_name, '販売スマートサイン',
+    CFG.e_kessai_name, 'e-決済',
+    CFG.store_perf_name, 'ストアパフォーマンス',
+    'カーセンサー', 'Goo', 'オートサーバー', 'オークネット', '媒体',
+  ];
+  for (let i = 0; i < order.length; i++) {
+    if (name.includes(order[i])) return i;
+  }
+  return 999;
+}
+
 function openQuoteWindow(company, person) {
   const d = new Date();
   const dateStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
@@ -2052,7 +2079,9 @@ function openQuoteWindow(company, person) {
       const mult = s.mult || 1;
       return Array.from({length: mult}, () => s.mL).flat();
     });
-    mL = [...consolidateForDownload(expandedML), ...q.lawMonthly];
+    // システム順に並べる（法人共通費用も同システムの費用と隣接させる）
+    const allMonthly = [...consolidateForDownload(expandedML), ...q.lawMonthly];
+    mL = allMonthly.sort((a, b) => sysLineOrder(a.n) - sysLineOrder(b.n));
     ti = q.totalInit; tm = q.totalMonthly;
     const sysNames = [...new Set(
       mL.filter(l=>!l.inc).map(l=>{ const m=l.n.match(/^(.+?)[ 　×]/); return m?m[1]:l.n; })
@@ -2253,21 +2282,21 @@ function renderQuoteSingle(storeSections, lawInit, lawMonthly, li, lm, totalInit
 
   // Init section
   let initHtml = '';
-  // Per-store init
   storeSections.forEach(s => {
     if (s.iL.length === 0) return;
-    initHtml += `<div class="q-store-label">📍 ${s.name}</div>${s.iL.map(lineHtml).join('')}`;
+    const label = s.name ? `<div class="q-store-label">📍 ${s.name}</div>` : '';
+    initHtml += label + s.iL.map(lineHtml).join('');
   });
-  // Law init
   if (lawInit.length) {
     initHtml += `<div class="q-store-label" style="color:#7c3aed">🏢 法人共通（1回のみ）</div>${lawInit.map(lineHtml).join('')}`;
   }
 
-  // Monthly section
+  // Monthly section（システム順で表示）
   let monthHtml = '';
   storeSections.forEach(s => {
     if (s.mL.length === 0) return;
-    monthHtml += `<div class="q-store-label">📍 ${s.name} <span style="font-weight:400;color:#9ca3af;font-size:10px">（${fmt(s.sm)}/月）</span></div>${s.mL.map(lineHtml).join('')}`;
+    const label = s.name ? `<div class="q-store-label">📍 ${s.name} <span style="font-weight:400;color:#9ca3af;font-size:10px">（${fmt(s.sm)}/月）</span></div>` : '';
+    monthHtml += label + s.mL.map(lineHtml).join('');
   });
   if (lawMonthly.length) {
     monthHtml += `<div class="q-store-label" style="color:#7c3aed">🏢 法人共通</div>${lawMonthly.map(lineHtml).join('')}`;
