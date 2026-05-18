@@ -499,7 +499,12 @@
     <div class="modal-field">
       <label class="modal-label">発行日</label>
       <input class="modal-input" id="dlDate" type="date"
-        onkeydown="if(event.key==='Enter')execDownload()">
+        onkeydown="if(event.key==='Enter')document.getElementById('dlNotes').focus()">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">備考欄 <span style="color:#9ca3af;font-weight:400">（自動生成・自由に編集可）</span></label>
+      <textarea id="dlNotes" rows="7"
+        style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;line-height:1.7;resize:vertical;font-family:inherit;color:#374151"></textarea>
     </div>
     <div class="modal-actions">
       <button class="modal-btn modal-btn-cancel" onclick="closeDownloadModal()">キャンセル</button>
@@ -1960,20 +1965,53 @@ function showDownloadModal() {
   const pad = n => String(n).padStart(2,'0');
   document.getElementById('dlDate').value =
     `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+  // 備考欄：自動生成ノートを初期値にセット
+  document.getElementById('dlNotes').value = buildNotesText();
   setTimeout(() => document.getElementById('dlCompany').focus(), 80);
+}
+
+// 備考欄テキストを生成（モーダル初期値 & PDF出力共通）
+function buildNotesText() {
+  if (!lastQuoteData) return '';
+  const q = lastQuoteData;
+  const allML = q.storeSections ? q.storeSections.flatMap(ss => ss.mL||[]) : [];
+  const allNames = [...(q.iL||[]), ...allML].map(l => l.n).join(' ');
+  const isPkg = q.mode === 'pkg';
+  const hasSSSell = allNames.includes('販売スマートサイン')
+    || (isPkg && q.storeSections.some(ss => ss.type==='pkg' && PACKAGES[ss.pkg]?.inc?.smart_sign_sell));
+  const hasSSBuyOrCore = allNames.includes('買取スマートサイン') || allNames.includes('coreシステム')
+    || (isPkg && q.storeSections.some(ss =>
+        ss.type==='pkg' && (PACKAGES[ss.pkg]?.inc?.smart_sign_buy || PACKAGES[ss.pkg]?.inc?.core)));
+  const hasMedia    = allNames.includes('媒体連携') || MEDIA_LIST.some(m => allNames.includes(m.name));
+  const hasStorPerf = allNames.includes('ストアパフォーマンス');
+  const lines = [];
+  if (isPkg) {
+    lines.push('各システムのアカウント発行費は1IDにつき ¥5,000 がかかります（パッケージはインスマートシステム5IDまで無料、6ID目以降は ¥5,000/ID）。');
+  } else {
+    lines.push('各システムのアカウント発行費は1IDにつき ¥5,000 がかかります（インスマートシステムのみ1ID目無料）。');
+  }
+  if (hasSSBuyOrCore) lines.push('SMS送信には1件につき70文字以内25円、70文字の25円に加え、70文字以降の66文字ごとに25円かかります。');
+  if (hasSSSell)      lines.push('販売スマートサインは JOCAR連携が必須となり、別途 JCM社へのオプション申込が必要となります。');
+  if (hasStorPerf)    lines.push('ストアパフォーマンス（業績管理システム）は JOCARとの連携が必須です。別途 JCM社のご契約が必要となります。');
+  if (hasMedia)       lines.push('媒体連携はすべて各媒体との個別契約が必要です。');
+  lines.push('12カ月毎の更新となります。');
+  lines.push('※御見積金額に消費税は含まれておりません。');
+  lines.push('※御見積有効期限は発行日より2週間となります。');
+  return lines.join('\n');
 }
 function closeDownloadModal() {
   document.getElementById('dlModal').classList.remove('open');
 }
 function execDownload() {
-  const company = document.getElementById('dlCompany').value.trim() || '株式会社〇〇';
-  const person  = document.getElementById('dlPerson').value.trim()  || '';
-  const rawDate = document.getElementById('dlDate').value;
-  const dateStr = rawDate
+  const company  = document.getElementById('dlCompany').value.trim() || '株式会社〇〇';
+  const person   = document.getElementById('dlPerson').value.trim()  || '';
+  const rawDate  = document.getElementById('dlDate').value;
+  const dateStr  = rawDate
     ? rawDate.replace(/-/g, '/')
     : (() => { const d=new Date(); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`; })();
+  const notesText = document.getElementById('dlNotes').value.trim();
   closeDownloadModal();
-  openQuoteWindow(company, person, dateStr);
+  openQuoteWindow(company, person, dateStr, notesText);
 }
 
 // Parse a line-item {n, a, free, inc} → structured table row object
@@ -2050,8 +2088,9 @@ function sysLineOrder(name) {
   return 999;
 }
 
-function openQuoteWindow(company, person, dateStr) {
+function openQuoteWindow(company, person, dateStr, notesText) {
   if (!dateStr) { const d=new Date(); dateStr=`${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`; }
+  if (notesText === undefined) notesText = buildNotesText();
   const q = lastQuoteData;
 
   let iL, mL, ti, tm, subSystems, storeCount;
@@ -2103,31 +2142,7 @@ function openQuoteWindow(company, person, dateStr) {
     storeCount = q.storeSections.length;
   }
 
-  // ── Conditional 補足事項 ──
-  const allNames = [...iL, ...mL].map(l => l.n).join(' ');
-  const hasSSSell    = allNames.includes('販売スマートサイン')
-    || (q.mode==='pkg' && q.storeSections.some(ss => ss.type==='pkg' && PACKAGES[ss.pkg]?.inc?.smart_sign_sell));
-  const hasSSBuyOrCore = allNames.includes('買取スマートサイン') || allNames.includes('coreシステム')
-    || (q.mode==='pkg' && q.storeSections.some(ss =>
-        ss.type==='pkg' && (PACKAGES[ss.pkg]?.inc?.smart_sign_buy || PACKAGES[ss.pkg]?.inc?.core)));
-  const hasMedia     = allNames.includes('媒体連携') || MEDIA_LIST.some(m => allNames.includes(m.name));
-  const hasStorPerf  = allNames.includes('ストアパフォーマンス');
-
-  const isPkg = lastQuoteData?.mode === 'pkg';
-  let notesLines = [];
-  if (isPkg) {
-    notesLines.push('各システムのアカウント発行費は1IDにつき ¥5,000 がかかります（パッケージはインスマートシステム5IDまで無料、6ID目以降は ¥5,000/ID）。');
-  } else {
-    notesLines.push('各システムのアカウント発行費は1IDにつき ¥5,000 がかかります（インスマートシステムのみ1ID目無料）。');
-  }
-  if (hasSSBuyOrCore) notesLines.push('SMS送信には1件につき70文字以内25円、70文字の25円に加え、70文字以降の66文字ごとに25円かかります。');
-  if (hasSSSell)   notesLines.push('販売スマートサインは JOCAR連携が必須となり、別途 JCM社へのオプション申込が必要となります。');
-  if (hasStorPerf) notesLines.push('ストアパフォーマンス（業績管理システム）は JOCARとの連携が必須です。別途 JCM社のご契約が必要となります。');
-  if (hasMedia)    notesLines.push('媒体連携はすべて各媒体との個別契約が必要です。');
-  notesLines.push('12カ月毎の更新となります。');
-  notesLines.push('※御見積金額に消費税は含まれておりません。');
-  notesLines.push('※御見積有効期限は発行日より2週間となります。');
-  const notesHtml = notesLines.join('<br>');
+  // notesText はモーダルで編集済みのものが渡される（buildNotesText()で生成された初期値）
 
   // Build table HTML strings
   const nonFreeInit = iL.filter(l => !l.free && !l.inc && l.a > 0);
@@ -2262,7 +2277,7 @@ tfoot tr.sub td{font-weight:700;text-align:right;background:#dce9f4;font-size:12
 
   <div class="notes-wrap">
     <div class="notes-h">補足事項</div>
-    <div class="notes-body">${notesHtml}</div>
+    <div class="notes-body">${notesText.replace(/\n/g,'<br>')}</div>
   </div>
 
 </div>
