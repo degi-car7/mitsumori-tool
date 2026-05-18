@@ -494,6 +494,11 @@
     <div class="modal-field">
       <label class="modal-label">担当者名 <span style="color:#9ca3af;font-weight:400">（省略可）</span></label>
       <input class="modal-input" id="dlPerson" type="text" placeholder="田川"
+        onkeydown="if(event.key==='Enter')document.getElementById('dlDate').focus()">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">発行日</label>
+      <input class="modal-input" id="dlDate" type="date"
         onkeydown="if(event.key==='Enter')execDownload()">
     </div>
     <div class="modal-actions">
@@ -1950,6 +1955,11 @@ function renderQuotePkg(iL, ti, tm, storeSections) {
 function showDownloadModal() {
   if (!lastQuoteData) { alert('先に条件を設定して見積を計算してください'); return; }
   document.getElementById('dlModal').classList.add('open');
+  // 今日の日付をデフォルトに
+  const today = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById('dlDate').value =
+    `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
   setTimeout(() => document.getElementById('dlCompany').focus(), 80);
 }
 function closeDownloadModal() {
@@ -1958,8 +1968,12 @@ function closeDownloadModal() {
 function execDownload() {
   const company = document.getElementById('dlCompany').value.trim() || '株式会社〇〇';
   const person  = document.getElementById('dlPerson').value.trim()  || '';
+  const rawDate = document.getElementById('dlDate').value;
+  const dateStr = rawDate
+    ? rawDate.replace(/-/g, '/')
+    : (() => { const d=new Date(); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`; })();
   closeDownloadModal();
-  openQuoteWindow(company, person);
+  openQuoteWindow(company, person, dateStr);
 }
 
 // Parse a line-item {n, a, free, inc} → structured table row object
@@ -2036,9 +2050,8 @@ function sysLineOrder(name) {
   return 999;
 }
 
-function openQuoteWindow(company, person) {
-  const d = new Date();
-  const dateStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+function openQuoteWindow(company, person, dateStr) {
+  if (!dateStr) { const d=new Date(); dateStr=`${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`; }
   const q = lastQuoteData;
 
   let iL, mL, ti, tm, subSystems, storeCount;
@@ -2133,9 +2146,10 @@ function openQuoteWindow(company, person) {
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>御見積書 − ${company}</title>
+<title>御見積書　${company} 御中</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
+@page{size:A4;margin:0}
 body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;font-size:11.5px;color:#000;background:#fff}
 .page{width:210mm;min-height:297mm;padding:14mm 16mm;margin:0 auto}
 /* header */
