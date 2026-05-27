@@ -664,7 +664,7 @@ function makePkgStore(num) {
     media: { cs:false, goo:false, as:false, onet:false },
     // ── Custom fields ──
     c_e_answer: false,
-    c_insmart: false, c_insmart_ids: 3,
+    c_insmart: true, c_insmart_ids: 3,
     c_account_ids: 1,
     c_core: false, c_core_ids: 2, c_core_type: 'media',
     c_smart_sign_buy: false,
@@ -1153,8 +1153,9 @@ function buildCustomStoreBody(ps) {
   let html = '<div>';
   SYS.forEach(s => {
     const ck = 'c_' + s.key;
-    const checked = ps[ck] ? 'checked' : '';
-    const isOpen = ps[ck] ? 'open' : '';
+    const ckVal = s.isMedia ? Object.values(ps.c_media).some(v => v) : ps[ck];
+    const checked = ckVal ? 'checked' : '';
+    const isOpen = ckVal ? 'open' : '';
     let subHtml = '';
 
     if (s.hasIDs && !s.isMedia) {
