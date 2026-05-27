@@ -430,7 +430,7 @@
           </div>
           <div id="accountFeeCtrl" class="num-ctrl">
             <button onclick="adjSingleAccount(-1)">−</button>
-            <input type="number" id="singleAccountInput" value="1" min="1" max="99"
+            <input type="number" id="singleAccountInput" value="1" min="0" max="99"
               oninput="setSingleAccountCount(this.value)">
             <button onclick="adjSingleAccount(1)">＋</button>
           </div>
@@ -974,7 +974,7 @@ function buildPkgStoreAddons(ps, pkg) {
       </div>
       <div class="num-ctrl-sm">
         <button onclick="adjPkgStore(${ps.id},'account_ids',-1)">−</button>
-        <input type="number" value="${ps.account_ids}" min="1" max="99"
+        <input type="number" value="${ps.account_ids}" min="0" max="99"
           oninput="setPkgStoreField(${ps.id},'account_ids',+this.value)">
         <button onclick="adjPkgStore(${ps.id},'account_ids',1)">＋</button>
       </div>
@@ -1106,7 +1106,9 @@ function copyPkgStore(id) {
 function setPkgStoreField(id, key, val) {
   const ps = pkgStores.find(s => s.id === id);
   if (!ps) return;
-  if (['insmart_ids','account_ids','core_ids','addon_core_ids','storeMultiplier'].includes(key)) {
+  if (['account_ids'].includes(key)) {
+    ps[key] = Math.max(0, parseInt(val) || 0);
+  } else if (['insmart_ids','core_ids','addon_core_ids','storeMultiplier'].includes(key)) {
     ps[key] = Math.max(1, parseInt(val) || 1);
   } else {
     ps[key] = val;
@@ -1117,7 +1119,8 @@ function setPkgStoreField(id, key, val) {
 function adjPkgStore(id, key, delta) {
   const ps = pkgStores.find(s => s.id === id);
   if (!ps) return;
-  ps[key] = Math.max(1, (ps[key] || 1) + delta);
+  const minVal = (key === 'account_ids') ? 0 : 1;
+  ps[key] = Math.max(minVal, (ps[key] || 0) + delta);
   renderPkgStores();
   calc();
 }
@@ -1203,7 +1206,7 @@ function buildCustomStoreBody(ps) {
     </div>
     <div class="num-ctrl-sm">
       <button onclick="adjPkgCustom(${ps.id},'c_account_ids',-1)">−</button>
-      <input type="number" value="${ps.c_account_ids}" min="1" max="99"
+      <input type="number" value="${ps.c_account_ids}" min="0" max="99"
         oninput="setPkgCustomField(${ps.id},'c_account_ids',+this.value)">
       <button onclick="adjPkgCustom(${ps.id},'c_account_ids',1)">＋</button>
     </div>
@@ -1232,7 +1235,9 @@ function setPkgCustomSys(id, sysKey, val) {
 function setPkgCustomField(id, key, val) {
   const ps = pkgStores.find(s => s.id === id);
   if (!ps) return;
-  if (key.includes('_ids')) {
+  if (key === 'c_account_ids') {
+    ps[key] = Math.max(0, parseInt(val) || 0);
+  } else if (key.includes('_ids')) {
     ps[key] = Math.max(1, parseInt(val) || 1);
   } else {
     ps[key] = val;
@@ -1243,7 +1248,8 @@ function setPkgCustomField(id, key, val) {
 function adjPkgCustom(id, key, delta) {
   const ps = pkgStores.find(s => s.id === id);
   if (!ps) return;
-  ps[key] = Math.max(1, (ps[key] || 1) + delta);
+  const minVal = (key === 'c_account_ids') ? 0 : 1;
+  ps[key] = Math.max(minVal, (ps[key] || 0) + delta);
   renderPkgStores();
   calc();
 }
@@ -1292,12 +1298,12 @@ function updateAccountPanel() {
 }
 
 function setSingleAccountCount(val) {
-  singleAccountCount = Math.max(1, parseInt(val) || 1);
+  singleAccountCount = Math.max(0, parseInt(val) || 0);
   calc();
 }
 
 function adjSingleAccount(delta) {
-  singleAccountCount = Math.max(1, singleAccountCount + delta);
+  singleAccountCount = Math.max(0, singleAccountCount + delta);
   const inp = document.getElementById('singleAccountInput');
   if (inp) inp.value = singleAccountCount;
   calc();
