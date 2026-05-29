@@ -361,6 +361,9 @@
       .pkg-grid { grid-template-columns: 1fr 1fr; }
     }
     #cfgPanel.open { display:block !important; }
+    #optPanel.open { display:block !important; }
+    .opt-row { margin-bottom: 4px; }
+    .opt-sub { background: #f3f4f6; border-radius: 6px; padding: 8px 10px; }
   </style>
 </head>
 <body>
@@ -446,6 +449,18 @@
         <span style="font-size:18px">＋</span> 店舗を追加する
       </button>
     </div><!-- /modeSingle -->
+
+    <!-- ─── オプション ─── -->
+    <div style="margin-top:16px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden" id="optionBlock">
+      <button onclick="document.getElementById('optPanel').classList.toggle('open')"
+        style="width:100%;padding:10px 14px;background:#f8fafc;border:none;cursor:pointer;text-align:left;font-size:13px;font-weight:600;color:#374151;display:flex;align-items:center;gap:6px">
+        ➕ オプション（別途費用）
+        <span style="margin-left:auto;font-size:10px;color:#9ca3af">▼</span>
+      </button>
+      <div id="optPanel" style="display:none;padding:14px;background:#fff;border-top:1px solid #e5e7eb">
+        <div id="optBody"></div>
+      </div>
+    </div>
 
     <!-- ─── Config Edit Panel ─── -->
     <div style="margin-top:16px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden">
@@ -580,6 +595,21 @@ let CFG = {
   media_as_monthly:   2000,
   media_onet_name:  'オークネット',
   media_onet_monthly: 2000,
+
+  // ── オプション価格 ──
+  uss_fixed_only:        100000,  // 定額・解析のみ /POS/月
+  uss_fixed_jocar:       200000,  // 定額・JOCAR RPA入力 /POS/月
+  uss_metered_only:       10000,  // 従量・解析のみ 固定 /POS/月
+  uss_metered_jocar:      20000,  // 従量・JOCAR RPA入力 固定 /POS/月
+  uss_metered_per:          200,  // 従量 /件
+  sms_mutual:             37000,  // SMS相互利用 /法人/月
+  training_honbu:         30000,  // 本部研修 /人/日
+  training_shutcho:       33000,  // 出張研修 /人/日
+  training_web:           20000,  // WEB研修 /人/日
+  price_paper_init:        5000,  // プライスペーパー初期 /法人
+  price_paper_monthly:     3800,  // プライスペーパー月額 /店舗
+  price_board_regular:     4900,  // プライスボード エアプラ(レギュラー) /ロット
+  price_board_pr:         14900,  // プライスボード エアプラ(PRシート) /ロット
 };
 
 const CFG_DEFAULT = JSON.parse(JSON.stringify(CFG)); // 起動時に保存
@@ -638,6 +668,18 @@ let storeIdCounter = 1;
 let pkgStoreIdCounter = 1;
 let lastQuoteData = null;   // populated by renderQuotePkg / renderQuoteSingle
 let singleAccountCount = 1; // アカウント数（インスマート未使用時に手動入力）
+
+// ── オプション状態 ──
+let OPTS = {
+  uss:              false, uss_plan: 'fixed_only', uss_pos: 1,
+  sms_mutual:       false,
+  t_honbu:          false, t_honbu_persons: 1, t_honbu_days: 1,
+  t_shutcho:        false, t_shutcho_persons: 1, t_shutcho_days: 1,
+  t_web:            false, t_web_persons: 1, t_web_days: 1,
+  price_paper:      false, price_paper_stores: 1,
+  board_regular:    false, board_regular_lots: 1,
+  board_pr:         false, board_pr_lots: 1,
+};
 let pkgViewMode = 'consolidated'; // 'consolidated' | 'perstore'
 
 function makePkgStore(num) {
@@ -818,6 +860,7 @@ window.onload = () => {
   renderPkgStores();
   renderStores();
   renderCfgPanel();
+  renderOptions();
 };
 
 function setMode(m) {
@@ -1498,7 +1541,188 @@ function fmt(n) { return '¥' + n.toLocaleString(); }
 // ══════════════════════════════════════════
 //  CALC DISPATCH
 // ══════════════════════════════════════════
+// ══════════════════════════════════════════
+//  OPTION UI
+// ══════════════════════════════════════════
+function renderOptions() {
+  const el = document.getElementById('optBody');
+  if (!el) return;
+  const O = OPTS;
+  const num = (key, val, min=1) =>
+    `<div class="num-ctrl-sm" style="display:inline-flex">
+      <button onclick="adjOpt('${key}',-1,${min})">−</button>
+      <input type="number" value="${val}" min="${min}" max="999" style="width:44px"
+        oninput="setOpt('${key}',+this.value,${min})">
+      <button onclick="adjOpt('${key}',1,${min})">＋</button>
+    </div>`;
+  const row = (lbl, checked, key, sub='') =>
+    `<div class="opt-row">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer">
+        <input type="checkbox" ${checked?'checked':''} onchange="toggleOpt('${key}',this.checked)"> ${lbl}
+      </label>${sub?`<div class="opt-sub" style="margin-left:22px;margin-top:6px;font-size:12px;color:#4b5563">${sub}</div>`:''}
+    </div>`;
+
+  // USS plan options
+  const ussPlans = [
+    { val:'fixed_only',    label:`定額プラン 解析のみ（¥${CFG.uss_fixed_only.toLocaleString()}/POS/月）` },
+    { val:'fixed_jocar',   label:`定額プラン JOCAR RPA入力（¥${CFG.uss_fixed_jocar.toLocaleString()}/POS/月）` },
+    { val:'metered_only',  label:`従量課金プラン 解析のみ（¥${CFG.uss_metered_only.toLocaleString()}/POS/月 ＋ ¥${CFG.uss_metered_per}/件）` },
+    { val:'metered_jocar', label:`従量課金プラン JOCAR RPA入力（¥${CFG.uss_metered_jocar.toLocaleString()}/POS/月 ＋ ¥${CFG.uss_metered_per}/件）` },
+  ];
+  const ussSubHtml = O.uss ? `
+    <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px">
+      ${ussPlans.map(p=>`<label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="radio" name="uss_plan" value="${p.val}" ${O.uss_plan===p.val?'checked':''}
+          onchange="setOpt('uss_plan','${p.val}')"> ${p.label}
+      </label>`).join('')}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">POS数 ${num('uss_pos', O.uss_pos)}</div>` : '';
+
+  const trainingRows =
+    `<div style="display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" ${O.t_honbu?'checked':''} onchange="toggleOpt('t_honbu',this.checked)">
+          本部研修（¥${CFG.training_honbu.toLocaleString()}/人/日）
+        </label>
+        ${O.t_honbu?`人数 ${num('t_honbu_persons',O.t_honbu_persons)} 日数 ${num('t_honbu_days',O.t_honbu_days)}`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" ${O.t_shutcho?'checked':''} onchange="toggleOpt('t_shutcho',this.checked)">
+          出張研修（¥${CFG.training_shutcho.toLocaleString()}/人/日）
+        </label>
+        ${O.t_shutcho?`人数 ${num('t_shutcho_persons',O.t_shutcho_persons)} 日数 ${num('t_shutcho_days',O.t_shutcho_days)}`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" ${O.t_web?'checked':''} onchange="toggleOpt('t_web',this.checked)">
+          WEB研修（¥${CFG.training_web.toLocaleString()}/人/日）
+        </label>
+        ${O.t_web?`人数 ${num('t_web_persons',O.t_web_persons)} 日数 ${num('t_web_days',O.t_web_days)}`:''}
+      </div>
+    </div>`;
+
+  const boardRows =
+    `<div style="display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" ${O.board_regular?'checked':''} onchange="toggleOpt('board_regular',this.checked)">
+          エアプラ レギュラー（¥${CFG.price_board_regular.toLocaleString()}/ロット・5枚）
+        </label>
+        ${O.board_regular?`ロット数 ${num('board_regular_lots',O.board_regular_lots)}`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" ${O.board_pr?'checked':''} onchange="toggleOpt('board_pr',this.checked)">
+          エアプラ PRシート（¥${CFG.price_board_pr.toLocaleString()}/ロット・5枚）
+        </label>
+        ${O.board_pr?`ロット数 ${num('board_pr_lots',O.board_pr_lots)}`:''}
+      </div>
+    </div>`;
+
+  const ppSubHtml = O.price_paper
+    ? `初期 ¥${CFG.price_paper_init.toLocaleString()}/法人　月額 ¥${CFG.price_paper_monthly.toLocaleString()}/店舗<br>
+       店舗数 ${num('price_paper_stores',O.price_paper_stores)}`
+    : '';
+
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:11px;color:#9ca3af;margin-bottom:2px">※ 下記は主要システムとは別途ご請求となるオプションです</div>
+
+      <div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;padding:10px">
+        <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">📊 USS精算解析システム</div>
+        ${row('利用する', O.uss, 'uss', ussSubHtml)}
+      </div>
+
+      <div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;padding:10px">
+        <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">📱 SMS相互利用</div>
+        ${row(`SMS相互利用（¥${CFG.sms_mutual.toLocaleString()}/法人/月）`, O.sms_mutual, 'sms_mutual')}
+      </div>
+
+      <div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;padding:10px">
+        <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">🎓 研修</div>
+        ${trainingRows}
+      </div>
+
+      <div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;padding:10px">
+        <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">🏷 プライスペーパー</div>
+        ${row('利用する', O.price_paper, 'price_paper', ppSubHtml)}
+      </div>
+
+      <div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;padding:10px">
+        <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">🪧 プライスボード（セット割・1ロット5枚）</div>
+        ${boardRows}
+      </div>
+    </div>`;
+}
+
+function toggleOpt(key, val) {
+  OPTS[key] = val;
+  renderOptions();
+  calc();
+}
+function setOpt(key, val, min=0) {
+  OPTS[key] = (typeof val === 'string') ? val : Math.max(min, parseInt(val)||min);
+  renderOptions();
+  calc();
+}
+function adjOpt(key, delta, min=1) {
+  const cur = OPTS[key];
+  if (typeof cur === 'number') OPTS[key] = Math.max(min, cur + delta);
+  renderOptions();
+  calc();
+}
+
+// オプション行リストを生成（init/monthly に分けて返す）
+function buildOptLines() {
+  const O = OPTS;
+  const iL = [], mL = [];
+  // USS
+  if (O.uss) {
+    const planMap = {
+      fixed_only:   { label:'USS精算解析 定額・解析のみ',        price: CFG.uss_fixed_only },
+      fixed_jocar:  { label:'USS精算解析 定額・JOCAR RPA入力',  price: CFG.uss_fixed_jocar },
+      metered_only: { label:'USS精算解析 従量・解析のみ',        price: CFG.uss_metered_only },
+      metered_jocar:{ label:'USS精算解析 従量・JOCAR RPA入力',  price: CFG.uss_metered_jocar },
+    };
+    const p = planMap[O.uss_plan] || planMap.fixed_only;
+    mL.push({ n:`${p.label} × ${O.uss_pos}POS`, a: p.price * O.uss_pos, optTag:'uss' });
+  }
+  // SMS
+  if (O.sms_mutual) {
+    mL.push({ n:'SMS相互利用', a: CFG.sms_mutual, optTag:'sms' });
+  }
+  // 研修
+  if (O.t_honbu) {
+    const a = CFG.training_honbu * O.t_honbu_persons * O.t_honbu_days;
+    iL.push({ n:`本部研修 ${O.t_honbu_persons}人×${O.t_honbu_days}日`, a, optTag:'training' });
+  }
+  if (O.t_shutcho) {
+    const a = CFG.training_shutcho * O.t_shutcho_persons * O.t_shutcho_days;
+    iL.push({ n:`出張研修 ${O.t_shutcho_persons}人×${O.t_shutcho_days}日`, a, optTag:'training' });
+  }
+  if (O.t_web) {
+    const a = CFG.training_web * O.t_web_persons * O.t_web_days;
+    iL.push({ n:`WEB研修 ${O.t_web_persons}人×${O.t_web_days}日`, a, optTag:'training' });
+  }
+  // プライスペーパー
+  if (O.price_paper) {
+    iL.push({ n:'プライスペーパー 初期', a: CFG.price_paper_init, optTag:'pp' });
+    mL.push({ n:`プライスペーパー × ${O.price_paper_stores}店舗`, a: CFG.price_paper_monthly * O.price_paper_stores, optTag:'pp' });
+  }
+  // プライスボード
+  if (O.board_regular) {
+    iL.push({ n:`プライスボード エアプラ(レギュラー) × ${O.board_regular_lots}ロット`, a: CFG.price_board_regular * O.board_regular_lots, optTag:'board' });
+  }
+  if (O.board_pr) {
+    iL.push({ n:`プライスボード エアプラ(PRシート) × ${O.board_pr_lots}ロット`, a: CFG.price_board_pr * O.board_pr_lots, optTag:'board' });
+  }
+  return { iL, mL };
+}
+
 function calc() {
+  renderOptions();
   if (mode === 'pkg') calcPackage();
   else calcSingle();
   updateNoteBoxPreview();
@@ -1701,6 +1925,14 @@ function calcPackage() {
     storeSections.push({ name:'法人共通（カスタム分）', type:'law', mL: lawML, sm: lm });
   }
 
+  // オプション加算
+  const optLines = buildOptLines();
+  optLines.iL.forEach(l => { iL.push(l); ti += l.a; });
+  if (optLines.iL.length > 0 || optLines.mL.length > 0) {
+    storeSections.push({ name:'オプション', type:'opt', mL: optLines.mL, sm: optLines.mL.reduce((s,l)=>s+l.a,0) });
+    tm += optLines.mL.reduce((s,l)=>s+l.a,0);
+  }
+
   renderQuotePkg(iL, ti, tm, storeSections);
 }
 
@@ -1790,6 +2022,16 @@ function calcSingle() {
   totalInit     += li;
   totalMonthly  += lm;
 
+  // オプション加算
+  const optLines = buildOptLines();
+  optLines.iL.forEach(l => { lawInit.push(l); li += l.a; totalInit += l.a; });
+  const optMonthlySum = optLines.mL.reduce((s,l)=>s+l.a,0);
+  if (optLines.mL.length > 0) {
+    optLines.mL.forEach(l => lawMonthly.push(l));
+    lm += optMonthlySum;
+    totalMonthly += optMonthlySum;
+  }
+
   renderQuoteSingle(storeSections, lawInit, lawMonthly, li, lm, totalInit, totalMonthly);
 }
 
@@ -1810,7 +2052,7 @@ function togglePkgView() {
 function consolidateStoreLines(storeSections) {
   const map = new Map();
   storeSections.forEach(ss => {
-    if (ss.type === 'law') return;
+    if (ss.type === 'law' || ss.type === 'opt') return;
     ss.mL.forEach(l => {
       const key = `${l.n}||${l.a||0}||${!!l.free}||${!!l.inc}`;
       if (map.has(key)) {
@@ -1911,10 +2153,12 @@ function renderQuotePkg(iL, ti, tm, storeSections) {
     const consolidated = consolidateStoreLines(storeSections);
     monthHtml += consolidated.map(consolidatedLineHtml).join('');
 
-    // 法人共通セクションは別途表示
-    storeSections.filter(ss => ss.type === 'law').forEach(ss => {
+    // 法人共通・オプションセクションは別途表示
+    storeSections.filter(ss => ss.type === 'law' || ss.type === 'opt').forEach(ss => {
       if (ss.mL.length > 0) {
-        monthHtml += `<div class="q-store-label" style="color:#7c3aed;margin-top:6px">🏢 ${ss.name}</div>`;
+        const icon = ss.type === 'opt' ? '➕' : '🏢';
+        const color = ss.type === 'opt' ? '#d97706' : '#7c3aed';
+        monthHtml += `<div class="q-store-label" style="color:${color};margin-top:6px">${icon} ${ss.name}</div>`;
         monthHtml += ss.mL.map(lineHtml).join('');
       }
     });
@@ -1934,9 +2178,11 @@ function renderQuotePkg(iL, ti, tm, storeSections) {
           <span style="font-weight:400;color:#9ca3af;font-size:10px">（${fmt(ss.sm)}/月）</span>
         </div>`;
         monthHtml += ss.mL.map(lineHtml).join('');
-      } else if (ss.type === 'law') {
+      } else if (ss.type === 'law' || ss.type === 'opt') {
         if (ss.mL.length > 0) {
-          monthHtml += `<div class="q-store-label" style="color:#7c3aed">🏢 ${ss.name}</div>`;
+          const icon2 = ss.type === 'opt' ? '➕' : '🏢';
+          const col2  = ss.type === 'opt' ? '#d97706' : '#7c3aed';
+          monthHtml += `<div class="q-store-label" style="color:${col2}">${icon2} ${ss.name}</div>`;
           monthHtml += ss.mL.map(lineHtml).join('');
         }
       }
@@ -2053,6 +2299,39 @@ function parseLine(l) {
     return { name: l.n, qty: 1, unit: '法人', unitPrice: l.a, amount: l.a };
   }
 
+  // オプション: USS × N POS
+  const mUSS = l.n.match(/^(USS.+?) × (\d+)POS$/);
+  if (mUSS) {
+    const qty = parseInt(mUSS[2]);
+    return { name: mUSS[1], qty, unit: 'POS', unitPrice: Math.round(l.a/qty), amount: l.a };
+  }
+  // プライスペーパー × N店舗
+  const mPP = l.n.match(/^(プライスペーパー) × (\d+)店舗$/);
+  if (mPP) {
+    const qty = parseInt(mPP[2]);
+    return { name: mPP[1], qty, unit: '店舗', unitPrice: Math.round(l.a/qty), amount: l.a };
+  }
+  // 研修 N人×N日
+  const mTrn = l.n.match(/^(.+研修) (\d+)人×(\d+)日$/);
+  if (mTrn) {
+    const persons = parseInt(mTrn[2]), days = parseInt(mTrn[3]);
+    return { name: mTrn[1], qty:`${persons}人×${days}日`, unit:'−', unitPrice: Math.round(l.a/(persons*days)), amount: l.a };
+  }
+  // プライスボード × Nロット
+  const mBoard = l.n.match(/^(プライスボード.+?) × (\d+)ロット$/);
+  if (mBoard) {
+    const qty = parseInt(mBoard[2]);
+    return { name: mBoard[1], qty, unit: 'ロット', unitPrice: Math.round(l.a/qty), amount: l.a };
+  }
+  // SMS相互利用
+  if (l.n === 'SMS相互利用') {
+    return { name: 'SMS相互利用', qty: 1, unit: '法人', unitPrice: l.a, amount: l.a };
+  }
+  // プライスペーパー初期
+  if (l.n === 'プライスペーパー 初期') {
+    return { name: 'プライスペーパー 初期', qty: 1, unit: '法人', unitPrice: l.a, amount: l.a };
+  }
+
   // Default: per 店舗
   return { name: l.n, qty: 1, unit: '店舗', unitPrice: l.a, amount: l.a };
 }
@@ -2104,13 +2383,14 @@ function openQuoteWindow(company, person, dateStr, notesText) {
 
   if (q.mode === 'pkg') {
     iL = q.iL; ti = q.ti; tm = q.tm;
-    // mult倍を展開してから集約（法人共通は末尾に）
-    const storeMl = q.storeSections.filter(ss => ss.type !== 'law').flatMap(ss => {
+    // mult倍を展開してから集約（法人共通・オプションは末尾に）
+    const storeMl = q.storeSections.filter(ss => ss.type !== 'law' && ss.type !== 'opt').flatMap(ss => {
       const mult = ss.mult || 1;
       return Array.from({length: mult}, () => ss.mL).flat();
     });
     const lawMl = q.storeSections.filter(ss => ss.type === 'law').flatMap(ss => ss.mL);
-    mL = [...consolidateForDownload(storeMl), ...lawMl];
+    const optMl = q.storeSections.filter(ss => ss.type === 'opt').flatMap(ss => ss.mL);
+    mL = [...consolidateForDownload(storeMl), ...lawMl, ...optMl];
     const storeDescs = q.storeSections
       .filter(ss => ss.type === 'pkg' || ss.type === 'custom')
       .map(ss => {
