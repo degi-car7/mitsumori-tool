@@ -424,12 +424,12 @@
         <div class="store-summary-row" id="storeSummaryChips"></div>
       </div>
 
-      <!-- アカウント発行費 設定パネル -->
+      <!-- アカウント発行費用 設定パネル -->
       <div id="accountFeePanel" style="background:white;border-radius:12px;border:1px solid #e0e6ef;margin-bottom:16px;padding:14px 20px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
           <div>
             <div style="font-size:14px;font-weight:700;color:#1a3a5c">👤 アカウント数</div>
-            <div style="font-size:11px;color:#9ca3af;margin-top:2px" id="accountFeeHint">システムを利用するユーザー数（アカウント発行費 ¥5,000/ID）</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:2px" id="accountFeeHint">システムを利用するユーザー数（アカウント発行費用 ¥5,000/ID）</div>
           </div>
           <div id="accountFeeCtrl" class="num-ctrl">
             <button onclick="adjSingleAccount(-1)">−</button>
@@ -582,7 +582,7 @@ let CFG = {
   store_perf_monthly:   10000,
   store_perf_law_init:   5000,
 
-  // アカウント発行費
+  // アカウント発行費用
   account_init_per_id:  5000,
   account_pkg_free_ids:    5,
 
@@ -692,7 +692,7 @@ function makePkgStore(num) {
     // ── Package fields ──
     pkg: null,
     insmart_ids: 5,
-    account_ids: 5,   // アカウント発行費用の対象（全システム共通）
+    account_ids: 5,   // アカウント発行費用用の対象（全システム共通）
     core_ids: 3,
     core_type: 'media',
     addon_core: false,
@@ -814,7 +814,7 @@ function renderCfgPanel() {
       { key:'store_perf_monthly',  label:'月額/店舗', type:'price' },
       { key:'store_perf_law_init', label:'初期費用（法人）', type:'price' },
     ]},
-    { label:'👤 アカウント発行費', rows:[
+    { label:'👤 アカウント発行費用', rows:[
       { key:'account_init_per_id',  label:'発行費/ID', type:'price' },
       { key:'account_pkg_free_ids', label:'パッケージ無料ID数', type:'number' },
     ]},
@@ -1337,8 +1337,8 @@ function updateAccountPanel() {
   if (!ctrl) return;
   ctrl.style.display = 'flex';
   if (hint) hint.textContent = hasInsmart
-    ? 'システムを利用するユーザー数（アカウント発行費 ¥5,000/ID・インスマート利用時1ID目無料）'
-    : 'システムを利用するユーザー数（アカウント発行費 ¥5,000/ID）';
+    ? 'システムを利用するユーザー数（アカウント発行費用 ¥5,000/ID・インスマート利用時1ID目無料）'
+    : 'システムを利用するユーザー数（アカウント発行費用 ¥5,000/ID）';
 }
 
 function setSingleAccountCount(val) {
@@ -1750,9 +1750,9 @@ function updateNoteBoxPreview() {
 
   const lines = [];
   if (isPkg) {
-    lines.push('各システムのアカウント発行費は1IDにつき ¥5,000（パッケージはインスマート5IDまで無料、6ID目以降 ¥5,000/ID）。');
+    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000（パッケージはインスマート5IDまで無料、6ID目以降 ¥5,000/ID）。');
   } else {
-    lines.push('各システムのアカウント発行費は1IDにつき ¥5,000（インスマートのみ1ID目無料）。');
+    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000（インスマートのみ1ID目無料）。');
   }
   if (hasSSBuyOrCore) lines.push('SMS送信には1件につき70文字以内25円、70文字の25円に加え、70文字以降の66文字ごとに25円かかります。');
   if (hasSSSell)      lines.push('販売スマートサインは JOCAR連携が必須。別途 JCM社へのオプション申込が必要です。');
@@ -1851,9 +1851,9 @@ function calcPackage() {
       const accExtra = Math.max(0, ps.account_ids - CFG.account_pkg_free_ids);
       if (accExtra > 0) {
         const a = accExtra * CFG.account_init_per_id * mult;
-        iL.push({ n:`アカウント発行費 × ${accExtra * mult}ID（${ps.name}・${CFG.account_pkg_free_ids + 1}ID目以降）`, a }); ti += a;
+        iL.push({ n:`アカウント発行費用 × ${accExtra * mult}ID（${ps.name}・${CFG.account_pkg_free_ids + 1}ID目以降）`, a }); ti += a;
       } else {
-        iL.push({ n:`アカウント発行費（${ps.name}・${ps.account_ids}ID・${CFG.account_pkg_free_ids}IDまで無料）`, a:0, free:true });
+        iL.push({ n:`アカウント発行費用（${ps.name}・${ps.account_ids}ID・${CFG.account_pkg_free_ids}IDまで無料）`, a:0, free:true });
       }
 
     } else {
@@ -1888,13 +1888,13 @@ function calcPackage() {
         if (ps.c_media[m.key]) { sml.push({ n:m.name, a:m.monthly }); sm += m.monthly; }
       });
 
-      // アカウント発行費（カスタム店舗：全システム共通アカウント数で計算、CFG.account_pkg_free_idsまで無料）
+      // アカウント発行費用（カスタム店舗：全システム共通アカウント数で計算、CFG.account_pkg_free_idsまで無料）
       const accIds = ps.c_account_ids;
       const accExtra = Math.max(0, accIds - CFG.account_pkg_free_ids);
       if (accExtra > 0) {
-        siL.push({ n:`アカウント発行費 × ${accExtra}ID（${CFG.account_pkg_free_ids + 1}ID目以降）`, a: accExtra * CFG.account_init_per_id });
+        siL.push({ n:`アカウント発行費用 × ${accExtra}ID（${CFG.account_pkg_free_ids + 1}ID目以降）`, a: accExtra * CFG.account_init_per_id });
       } else {
-        siL.push({ n:`アカウント発行費（${accIds}ID・${CFG.account_pkg_free_ids}IDまで無料）`, a:0, free:true });
+        siL.push({ n:`アカウント発行費用（${accIds}ID・${CFG.account_pkg_free_ids}IDまで無料）`, a:0, free:true });
       }
 
       // Per-store init fees go into main iL with store name prefix（mult倍）
@@ -2006,17 +2006,17 @@ function calcSingle() {
   if (anyEKessai)  { lawInit.push({ n: CFG.e_kessai_name + '初期（法人）', a: CFG.e_kessai_law_init }); li+= CFG.e_kessai_law_init; }
   if (anyStorPerf) { lawInit.push({ n: CFG.store_perf_name + ' 初期（法人）', a: CFG.store_perf_law_init }); li+= CFG.store_perf_law_init; }
 
-  // アカウント発行費：常に「アカウント数」欄の値を使用
+  // アカウント発行費用：常に「アカウント数」欄の値を使用
   // インスマート利用時は1ID目無料、未利用時は全ID課金
   const freeIds = anyInsmart ? 1 : 0;
   const accountFeeCount = Math.max(0, singleAccountCount - freeIds);
 
   if (accountFeeCount > 0) {
     const feeAmt = accountFeeCount * CFG.account_init_per_id;
-    lawInit.push({ n:`アカウント発行費 × ${accountFeeCount}ID`, a: feeAmt }); li += feeAmt;
+    lawInit.push({ n:`アカウント発行費用 × ${accountFeeCount}ID`, a: feeAmt }); li += feeAmt;
   } else {
     // 全額無料（インスマート利用かつアカウント数1の場合）
-    lawInit.push({ n:`アカウント発行費（${singleAccountCount}ID・1ID目無料）`, a:0, free:true });
+    lawInit.push({ n:`アカウント発行費用（${singleAccountCount}ID・1ID目無料）`, a:0, free:true });
   }
 
   totalInit     += li;
@@ -2239,9 +2239,9 @@ function buildNotesText() {
   const hasStorPerf = allNames.includes('ストアパフォーマンス');
   const lines = [];
   if (isPkg) {
-    lines.push('各システムのアカウント発行費は1IDにつき ¥5,000 がかかります（パッケージはインスマートシステム5IDまで無料、6ID目以降は ¥5,000/ID）。');
+    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000 がかかります（パッケージはインスマートシステム5IDまで無料、6ID目以降は ¥5,000/ID）。');
   } else {
-    lines.push('各システムのアカウント発行費は1IDにつき ¥5,000 がかかります（インスマートシステムのみ1ID目無料）。');
+    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000 がかかります（インスマートシステムのみ1ID目無料）。');
   }
   if (hasSSBuyOrCore) lines.push('SMS送信には1件につき70文字以内25円、70文字の25円に加え、70文字以降の66文字ごとに25円かかります。');
   if (hasSSSell)      lines.push('販売スマートサインは JOCAR連携が必須となり、別途 JCM社へのオプション申込が必要となります。');
@@ -2287,11 +2287,11 @@ function parseLine(l) {
     return { name: 'インスマートシステム', qty, unit: 'ID', unitPrice: Math.round(l.a / qty), amount: l.a };
   }
 
-  // "アカウント発行費 × NID" or "アカウント発行費 NID" pattern
-  const m3 = l.n.match(/アカウント発行費[^0-9]*(\d+)ID/);
+  // "アカウント発行費用 × NID" or "アカウント発行費用 NID" pattern
+  const m3 = l.n.match(/アカウント発行費用[^0-9]*(\d+)ID/);
   if (m3) {
     const qty = parseInt(m3[1]);
-    return { name: 'アカウント発行費', qty, unit: 'ID', unitPrice: 5000, amount: l.a };
+    return { name: 'アカウント発行費用', qty, unit: 'ID', unitPrice: 5000, amount: l.a };
   }
 
   // Law-level items containing （法人） → unit: 法人
@@ -2569,16 +2569,78 @@ tfoot tr.sub td{font-weight:700;text-align:right;background:#dce9f4;font-size:12
 
 </div>
 
-<div class="no-print">
-  <button onclick="window.print()"
-    style="padding:12px 36px;background:#2d6a9f;color:#fff;border:none;border-radius:8px;
-           font-size:14px;font-weight:700;cursor:pointer">
-    🖨&nbsp;PDFとして保存 / 印刷する
-  </button>
-  <p style="margin-top:8px;font-size:12px;color:#6b7280">
-    印刷ダイアログで「PDFに保存」を選択するとPDFダウンロードできます
-  </p>
+<div class="no-print" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px 0">
+  <div style="display:flex;gap:12px">
+    <button onclick="window.print()"
+      style="padding:12px 28px;background:#2d6a9f;color:#fff;border:none;border-radius:8px;
+             font-size:14px;font-weight:700;cursor:pointer">
+      🖨&nbsp;印刷する
+    </button>
+    <button onclick="downloadPdf()"
+      style="padding:12px 28px;background:#059669;color:#fff;border:none;border-radius:8px;
+             font-size:14px;font-weight:700;cursor:pointer">
+      📥&nbsp;PDFを直接ダウンロード
+    </button>
+  </div>
+  <p id="pdfStatus" style="margin:0;font-size:12px;color:#6b7280"></p>
 </div>
+<script>
+async function downloadPdf() {
+  const status = document.getElementById('pdfStatus');
+  status.textContent = '準備中...';
+  const loadScript = (src) => new Promise((res, rej) => {
+    if (document.querySelector('script[src="' + src + '"]')) { res(); return; }
+    const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+  try {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    status.textContent = 'レンダリング中...';
+    await new Promise(r => setTimeout(r, 200));
+    const page = document.querySelector('.page');
+    const canvas = await html2canvas(page, {
+      scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false
+    });
+    const { jsPDF } = window.jspdf;
+    const A4_W = 210, A4_H = 297;
+    const imgW = A4_W;
+    const imgH = (canvas.height / canvas.width) * A4_W;
+    let pdf;
+    if (imgH <= A4_H) {
+      pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, imgW, imgH);
+    } else {
+      pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageHeightPx = canvas.width * (A4_H / A4_W);
+      const totalPages = Math.ceil(canvas.height / pageHeightPx);
+      for (let i = 0; i < totalPages; i++) {
+        if (i > 0) pdf.addPage();
+        const srcY = Math.round(i * pageHeightPx);
+        const srcH = Math.min(pageHeightPx, canvas.height - srcY);
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = Math.round(pageHeightPx);
+        const ctx = sliceCanvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+        ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+        const sliceH = (sliceCanvas.height / sliceCanvas.width) * A4_W;
+        pdf.addImage(sliceCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, imgW, sliceH);
+      }
+    }
+    const titleEl = document.querySelector('.q-to');
+    const company = titleEl ? titleEl.textContent.replace(/\s*御中.*/, '').trim() : '';
+    const fname = company ? ('御見積書_' + company + '.pdf') : '御見積書.pdf';
+    pdf.save(fname);
+    status.textContent = 'ダウンロード完了！';
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  } catch(e) {
+    console.error(e);
+    status.textContent = 'エラーが発生しました。印刷からPDF保存をお試しください。';
+  }
+}
+<\/script>
 </body></html>`;
 
   const w = window.open('', '_blank');
