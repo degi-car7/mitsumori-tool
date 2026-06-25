@@ -1758,7 +1758,7 @@ function updateNoteBoxPreview() {
   if (hasSSSell)      lines.push('販売スマートサインは JOCAR連携が必須。別途 JCM社へのオプション申込が必要です。');
   if (hasStorPerf)    lines.push('ストアパフォーマンスは JOCARとの連携が必須。別途 JCM社のご契約が必要です。');
   if (hasMedia)       lines.push('媒体連携はすべて各媒体との個別契約が必要です。');
-  lines.push('12カ月毎の更新となります。');
+  lines.push('初月を除き、月額費用の請求開始月より12カ月間（総契約期間13カ月）のご契約となります。以降は12カ月毎の自動更新となります。');
   lines.push('※御見積金額に消費税は含まれておりません。');
   lines.push('※御見積有効期限は発行日より2週間となります。');
 
@@ -2247,7 +2247,7 @@ function buildNotesText() {
   if (hasSSSell)      lines.push('販売スマートサインは JOCAR連携が必須となり、別途 JCM社へのオプション申込が必要となります。');
   if (hasStorPerf)    lines.push('ストアパフォーマンス（業績管理システム）は JOCARとの連携が必須です。別途 JCM社のご契約が必要となります。');
   if (hasMedia)       lines.push('媒体連携はすべて各媒体との個別契約が必要です。');
-  lines.push('12カ月毎の更新となります。');
+  lines.push('初月を除き、月額費用の請求開始月より12カ月間（総契約期間13カ月）のご契約となります。以降は12カ月毎の自動更新となります。');
   lines.push('※御見積金額に消費税は含まれておりません。');
   lines.push('※御見積有効期限は発行日より2週間となります。');
   return lines.join('\n');
