@@ -85,6 +85,12 @@
     .pkg-card:hover { border-color: #2d6a9f; transform: translateY(-1px); }
     .pkg-card.selected { border-color: #2d6a9f; background: #f0f7ff; }
     .pkg-card input[type=radio] { position: absolute; opacity: 0; }
+    .seg-wrap { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
+    .seg-btn { padding: 6px 16px; border: none; background: #fff; color: #64748b; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s; }
+    .seg-btn + .seg-btn { border-left: 1px solid #cbd5e1; }
+    .seg-btn.active { background: #2d6a9f; color: #fff; font-weight: 700; }
+    .seg-wrap.seg-sm { border-radius: 6px; }
+    .seg-wrap.seg-sm .seg-btn { padding: 3px 12px; font-size: 12px; }
     .pkg-name { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
     .pkg-price { font-size: 18px; font-weight: 800; color: #2d6a9f; }
     .pkg-price span { font-size: 11px; font-weight: 400; color: #7a8899; }
@@ -441,6 +447,9 @@
             インスマートシステムのID数から自動計算されます
           </div>
         </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #eef2f7;font-size:11px;color:#9ca3af">
+          🏷️ 各システムの「新規／既存」は、下の店舗欄でチェックを入れると項目内で選択できます。
+        </div>
       </div>
 
       <div class="store-list" id="storeList"></div>
@@ -728,17 +737,32 @@ function makeStore(num) {
     storeMultiplier: 1,   // 同じ設定の店舗数（×N店舗）
     // systems
     e_answer: false,
-    insmart: false, insmart_ids: 3,
-    core: false, core_ids: 2, core_type: 'media',
+    insmart: false, insmart_ids: 3, insmart_cust: 'new',
+    core: false, core_ids: 2, core_type: 'media', core_cust: 'new',
     smart_sign_buy: false,
     smart_sign_sell: false,
     e_kessai: false,
     store_perf: false,
+    media_on: false,   // 媒体連携の親チェック（初期OFF）
     media: { cs:false, goo:false, as:false, onet:false }
   };
 }
 
 let stores = [makeStore(1)];
+
+// 顧客区分（単品モードのみ影響）は各店舗のシステムごとに保持する:
+//   st.insmart_cust / st.core_cust = 'new' | 'existing'
+//   insmart: new=1ID目無料＋法人基本料あり / existing=全ID課金＋法人基本料なし
+//   core:    new=基本利用料あり / existing=基本利用料なし（ID追加分のみ課金）
+// 法人単位の判定（アカウント発行費用の無料ID・インスマ法人基本料）はいずれかの店舗が新規なら「新規扱い」。
+function anyInsmartNew()      { return stores.some(st => st.insmart && st.insmart_cust === 'new'); }
+function anyInsmartExisting() { return stores.some(st => st.insmart && st.insmart_cust === 'existing'); }
+function anyCoreExisting()    { return stores.some(st => st.core && st.core_cust === 'existing'); }
+// 顧客区分ボタンの補足テキスト
+function custNoteText(key, val) {
+  if (key === 'insmart') return val === 'existing' ? '1ID目から課金・法人基本料なし' : '1ID目無料・法人基本料あり';
+  return val === 'existing' ? '基本利用料なし（ID追加のみ）' : '基本利用料あり';
+}
 
 // ══════════════════════════════════════════
 //  CONFIG
@@ -1336,9 +1360,24 @@ function updateAccountPanel() {
   const hint = document.getElementById('accountFeeHint');
   if (!ctrl) return;
   ctrl.style.display = 'flex';
-  if (hint) hint.textContent = hasInsmart
-    ? 'システムを利用するユーザー数（アカウント発行費用 ¥5,000/ID・インスマート利用時1ID目無料）'
-    : 'システムを利用するユーザー数（アカウント発行費用 ¥5,000/ID）';
+  const freeNote = (hasInsmart && anyInsmartNew()) ? '・インスマート利用時1ID目無料' : '';
+  if (hint) hint.textContent = `システムを利用するユーザー数（アカウント発行費用 ¥5,000/ID${freeNote}）`;
+}
+
+// 顧客区分の切替（店舗ごと・単品モードのみ影響）／key: 'insmart' | 'core'
+function setStoreCust(id, key, type) {
+  const st = stores.find(s => s.id === id);
+  if (!st) return;
+  const val = (type === 'existing') ? 'existing' : 'new';
+  st[key + '_cust'] = val;
+  const nb = document.getElementById(`stCust${id}_${key}_new`);
+  const eb = document.getElementById(`stCust${id}_${key}_existing`);
+  if (nb) nb.classList.toggle('active', val === 'new');
+  if (eb) eb.classList.toggle('active', val === 'existing');
+  const note = document.getElementById(`stCustNote${id}_${key}`);
+  if (note) note.textContent = custNoteText(key, val);
+  updateAccountPanel();
+  calc();
 }
 
 function setSingleAccountCount(val) {
@@ -1363,10 +1402,22 @@ function scrollToStore(id) {
 
 function renderStoreCard(st, idx) {
   const sysRows = SYS.map(s => {
-    const checked = st[s.key] ? 'checked' : '';
+    const isOn = s.isMedia ? !!st.media_on : !!st[s.key];
+    const checked = isOn ? 'checked' : '';
     let subHtml = '';
 
     if (s.hasIDs && !s.isMedia) {
+      const custVal = s.key === 'insmart' ? st.insmart_cust : st.core_cust;
+      subHtml += `<div class="sys-sub-row" style="align-items:center">
+        <span>顧客区分</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div class="seg-wrap seg-sm">
+            <button type="button" id="stCust${st.id}_${s.key}_new" class="seg-btn ${custVal==='new'?'active':''}" onclick="setStoreCust(${st.id},'${s.key}','new')">新規</button>
+            <button type="button" id="stCust${st.id}_${s.key}_existing" class="seg-btn ${custVal==='existing'?'active':''}" onclick="setStoreCust(${st.id},'${s.key}','existing')">既存</button>
+          </div>
+          <span style="font-size:10px;color:#9ca3af" id="stCustNote${st.id}_${s.key}">${custNoteText(s.key, custVal)}</span>
+        </div>
+      </div>`;
       const idVal = s.key === 'insmart' ? st.insmart_ids : st.core_ids;
       const idKey = s.key === 'insmart' ? 'insmart_ids' : 'core_ids';
       subHtml += `<div class="sys-sub-row">
@@ -1399,10 +1450,13 @@ function renderStoreCard(st, idx) {
         </label>`).join('')}</div>`;
     }
 
-    const subOpen = st[s.key] ? 'open' : '';
+    const subOpen = isOn ? 'open' : '';
+    const onChangeAttr = s.isMedia
+      ? `toggleStoreMedia(${st.id},this.checked)`
+      : `setStore(${st.id},'${s.key}',this.checked)`;
     return `<div class="sys-row">
       <input type="checkbox" id="st${st.id}_${s.key}" ${checked}
-        onchange="setStore(${st.id},'${s.key}',this.checked)">
+        onchange="${onChangeAttr}">
       <div class="sys-info">
         <div class="sys-name">${s.name}</div>
         <div class="sys-hint">${s.hint}</div>
@@ -1510,6 +1564,16 @@ function setStoreMedia(id, mediaKey, val) {
   const st = stores.find(s => s.id === id);
   if (!st) return;
   st.media[mediaKey] = val;
+  calc();
+}
+
+// 媒体連携の親チェック切替（初期OFF）
+function toggleStoreMedia(id, on) {
+  const st = stores.find(s => s.id === id);
+  if (!st) return;
+  st.media_on = on;
+  const sub = document.getElementById(`stSub${id}_media`);
+  if (sub) sub.classList.toggle('open', on);
   calc();
 }
 
@@ -1748,12 +1812,18 @@ function updateNoteBoxPreview() {
   const hasMedia    = allNames.includes('媒体連携') || MEDIA_LIST.some(m => allNames.includes(m.name));
   const hasStorPerf = allNames.includes('ストアパフォーマンス');
 
+  const hasInsmartNm = allNames.includes('インスマート');
+  const hasCoreNm    = allNames.includes('coreシステム');
   const lines = [];
   if (isPkg) {
     lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000（パッケージはインスマート5IDまで無料、6ID目以降 ¥5,000/ID）。');
+  } else if (anyInsmartNew()) {
+    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000（新規顧客はインスマート利用時のみ1ID目無料）。');
   } else {
-    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000（インスマートのみ1ID目無料）。');
+    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000。');
   }
+  if (!isPkg && hasInsmartNm && !anyInsmartNew()) lines.push('インスマートシステムは既存契約のため、法人基本料はかかりません。');
+  if (!isPkg && hasCoreNm    && anyCoreExisting()) lines.push('coreシステムは既存契約のため、基本利用料はかからず、ID追加分のみ課金となります。');
   if (hasSSBuyOrCore) lines.push('SMS送信には1件につき70文字以内25円、70文字の25円に加え、70文字以降の66文字ごとに25円かかります。');
   if (hasSSSell)      lines.push('販売スマートサインは JOCAR連携が必須。別途 JCM社へのオプション申込が必要です。');
   if (hasStorPerf)    lines.push('ストアパフォーマンスは JOCARとの連携が必須。別途 JCM社のご契約が必要です。');
@@ -1972,15 +2042,20 @@ function calcSingle() {
       const ci = st.core_type==='media'
         ? { n: CFG.core_media_name, init: CFG.core_media_init, mon: CFG.core_media_monthly }
         : { n: CFG.core_nomedia_name, init: CFG.core_nomedia_init, mon: CFG.core_nomedia_monthly };
-      iL.push({ n:`${ci.n} 初期`, a:ci.init }); si+=ci.init;
-      mL.push({ n:ci.n, a:ci.mon }); sm+=ci.mon;
+      if (st.core_cust === 'existing') {
+        // 既存顧客：基本利用料（初期・月額）はかからず、ID追加分のみ課金
+        mL.push({ n:`${ci.n} 基本（既存・無料）`, a:0, free:true });
+      } else {
+        iL.push({ n:`${ci.n} 初期`, a:ci.init }); si+=ci.init;
+        mL.push({ n:ci.n, a:ci.mon }); sm+=ci.mon;
+      }
       mL.push({ n:`coreシステム ID × ${st.core_ids}ID`, a: CFG.core_id_monthly * st.core_ids }); sm+= CFG.core_id_monthly * st.core_ids;
     }
     if (st.smart_sign_buy)  { anySSBuy=true;   mL.push({ n: CFG.ss_buy_name, a: CFG.ss_buy_monthly }); sm+= CFG.ss_buy_monthly; }
     if (st.smart_sign_sell) { anySSSell=true;  mL.push({ n: CFG.ss_sell_name, a: CFG.ss_sell_monthly }); sm+= CFG.ss_sell_monthly; }
     if (st.e_kessai)        { anyEKessai=true; mL.push({ n: CFG.e_kessai_name, a: CFG.e_kessai_monthly }); sm+= CFG.e_kessai_monthly; }
     if (st.store_perf)      { anyStorPerf=true;mL.push({ n: CFG.store_perf_name, a: CFG.store_perf_monthly }); sm+= CFG.store_perf_monthly; }
-    if (st.media) {
+    if (st.media_on && st.media) {
       MEDIA_LIST.forEach(m => {
         if (st.media[m.key]) { mL.push({ n:m.name, a:m.monthly }); sm+=m.monthly; }
       });
@@ -1997,8 +2072,14 @@ function calcSingle() {
   const lawInit = [], lawMonthly = [];
   let li=0, lm=0;
 
+  const insmartCompanyNew = anyInsmartNew();  // いずれかの店舗が新規なら法人として新規扱い
   if (anyInsmart) {
-    lawMonthly.push({ n: CFG.insmart_name + ' 基本（法人）', a: CFG.insmart_law_monthly }); lm+= CFG.insmart_law_monthly;
+    if (!insmartCompanyNew) {
+      // 全店舗が既存：法人基本料はかからない
+      lawMonthly.push({ n: CFG.insmart_name + ' 基本（法人・既存・無料）', a: 0, free:true });
+    } else {
+      lawMonthly.push({ n: CFG.insmart_name + ' 基本（法人）', a: CFG.insmart_law_monthly }); lm+= CFG.insmart_law_monthly;
+    }
   }
   // 法人単位の初期費用（各システム1回のみ）
   if (anySSBuy)    { lawInit.push({ n: CFG.ss_buy_name + ' 初期（法人）', a: CFG.ss_buy_law_init }); li+= CFG.ss_buy_law_init; }
@@ -2007,16 +2088,17 @@ function calcSingle() {
   if (anyStorPerf) { lawInit.push({ n: CFG.store_perf_name + ' 初期（法人）', a: CFG.store_perf_law_init }); li+= CFG.store_perf_law_init; }
 
   // アカウント発行費用：常に「アカウント数」欄の値を使用
-  // インスマート利用時は1ID目無料、未利用時は全ID課金
-  const freeIds = anyInsmart ? 1 : 0;
+  // インスマート新規（いずれかの店舗が新規）は1ID目無料、全店舗既存・インスマート未利用時は全ID課金
+  const freeIds = (anyInsmart && insmartCompanyNew) ? 1 : 0;
   const accountFeeCount = Math.max(0, singleAccountCount - freeIds);
 
   if (accountFeeCount > 0) {
     const feeAmt = accountFeeCount * CFG.account_init_per_id;
     lawInit.push({ n:`アカウント発行費用 × ${accountFeeCount}ID`, a: feeAmt }); li += feeAmt;
   } else {
-    // 全額無料（インスマート利用かつアカウント数1の場合）
-    lawInit.push({ n:`アカウント発行費用（${singleAccountCount}ID・1ID目無料）`, a:0, free:true });
+    // 全額無料（新規顧客＋インスマート利用でアカウント数1、またはアカウント数0）
+    const freeNote = (freeIds > 0 && singleAccountCount >= 1) ? '1ID目無料' : '無料';
+    lawInit.push({ n:`アカウント発行費用（${singleAccountCount}ID・${freeNote}）`, a:0, free:true });
   }
 
   totalInit     += li;
@@ -2237,12 +2319,18 @@ function buildNotesText() {
         ss.type==='pkg' && (PACKAGES[ss.pkg]?.inc?.smart_sign_buy || PACKAGES[ss.pkg]?.inc?.core)));
   const hasMedia    = allNames.includes('媒体連携') || MEDIA_LIST.some(m => allNames.includes(m.name));
   const hasStorPerf = allNames.includes('ストアパフォーマンス');
+  const hasInsmartNm = allNames.includes('インスマート');
+  const hasCoreNm    = allNames.includes('coreシステム');
   const lines = [];
   if (isPkg) {
     lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000 がかかります（パッケージはインスマートシステム5IDまで無料、6ID目以降は ¥5,000/ID）。');
+  } else if (anyInsmartNew()) {
+    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000 がかかります（新規顧客はインスマートシステム利用時のみ1ID目無料）。');
   } else {
-    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000 がかかります（インスマートシステムのみ1ID目無料）。');
+    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000 がかかります。');
   }
+  if (!isPkg && hasInsmartNm && !anyInsmartNew()) lines.push('インスマートシステムは既存契約のため、法人基本料はかかりません。');
+  if (!isPkg && hasCoreNm    && anyCoreExisting()) lines.push('coreシステムは既存契約のため、基本利用料はかからず、ID追加分のみ課金となります。');
   if (hasSSBuyOrCore) lines.push('SMS送信には1件につき70文字以内25円、70文字の25円に加え、70文字以降の66文字ごとに25円かかります。');
   if (hasSSSell)      lines.push('販売スマートサインは JOCAR連携が必須となり、別途 JCM社へのオプション申込が必要となります。');
   if (hasStorPerf)    lines.push('ストアパフォーマンス（業績管理システム）は JOCARとの連携が必須です。別途 JCM社のご契約が必要となります。');
