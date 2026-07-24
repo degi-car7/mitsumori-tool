@@ -390,7 +390,7 @@
         <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px">
           <div>
             <div style="font-size:15px;font-weight:700;color:#1a3a5c">📦 店舗別パッケージ設定</div>
-            <div style="font-size:11px;color:#9ca3af;margin-top:3px">各店舗ごとに「📦 パッケージ」または「🔧 カスタム」を選択できます。パッケージ店舗は初期費用無料（ID超過分除く）、カスタム店舗は単品と同じ料金体系です。</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:3px">各店舗ごとに「📦 パッケージ」または「🔧 単品」を選択できます。パッケージ店舗は初期費用無料（ID超過分除く）、単品店舗は個別のシステム料金体系です。</div>
           </div>
           <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
             <div class="store-count-badge" id="pkgStoreSummaryBadge">1店舗</div>
@@ -704,6 +704,7 @@ function makePkgStore(num) {
     addon_core_type: 'media',
     addon_smart_sign_sell: false,
     addon_smart_sign_buy: false,
+    ss_sell_link: 'jocar',   // 販売スマートサインの連携先（jocar=JCM / ittou=DIC）※パッケージ・単品共通
     addon_e_kessai: false,
     addon_store_perf: false,
     addon_e_answer: false,
@@ -763,6 +764,15 @@ function custNoteText(key, val) {
 function pkgAnyInsmartCustom()   { return pkgStores.some(ps => ps.type==='custom' && ps.c_insmart); }
 function pkgAnyInsmartNew()      { return pkgStores.some(ps => ps.type==='custom' && ps.c_insmart && ps.c_insmart_cust !== 'existing'); }
 function pkgAnyCoreExisting()    { return pkgStores.some(ps => ps.type==='custom' && ps.c_core && ps.c_core_cust === 'existing'); }
+// 販売スマートサインの連携先（JOCAR=JCM / 一等書記官=DIC）判定（備考欄の注記用）
+function pkgSsSellStores() {
+  return pkgStores.filter(ps =>
+    (ps.type==='custom' && ps.c_smart_sign_sell) ||
+    (ps.type==='pkg' && ps.pkg && (PACKAGES[ps.pkg]?.inc?.smart_sign_sell || ps.addon_smart_sign_sell))
+  );
+}
+function pkgAnySsSellJocar() { return pkgSsSellStores().some(ps => (ps.ss_sell_link||'jocar') === 'jocar'); }
+function pkgAnySsSellIttou() { return pkgSsSellStores().some(ps => (ps.ss_sell_link||'jocar') === 'ittou'); }
 
 // ══════════════════════════════════════════
 //  CONFIG
@@ -997,7 +1007,7 @@ function renderPkgStoreCard(ps, idx) {
       : `<span style="font-size:11px;color:#9ca3af;background:#f3f4f6;padding:2px 9px;border-radius:12px">📦 未選択</span>`;
   } else {
     pkgBadge = hasCustomSys(ps)
-      ? `<span style="font-size:11px;background:#7c3aed;color:white;padding:2px 9px;border-radius:12px;font-weight:600">🔧 カスタム</span>`
+      ? `<span style="font-size:11px;background:#7c3aed;color:white;padding:2px 9px;border-radius:12px;font-weight:600">🔧 単品</span>`
       : `<span style="font-size:11px;color:#9ca3af;background:#f3f4f6;padding:2px 9px;border-radius:12px">🔧 未設定</span>`;
   }
 
@@ -1122,12 +1132,24 @@ function buildPkgStoreAddons(ps, pkg) {
         const addonKey = `addon_${s.key}`;
         const chkd = ps[addonKey] ? 'checked' : '';
         const mon = SYS_MON_MAP[s.key] || 0;
+        let linkSub = '';
+        if (s.key === 'smart_sign_sell') {
+          const link = ps.ss_sell_link || 'jocar';
+          const disp = ps[addonKey] ? '' : 'none';
+          linkSub = `<div id="pkgAddSsLink_${ps.id}" style="display:${disp};margin:6px 0 2px 22px">
+            <div class="seg-wrap seg-sm">
+              <button type="button" id="ssLink${ps.id}_jocar" class="seg-btn ${link==='jocar'?'active':''}" onclick="setPkgSsLink(${ps.id},'jocar')">JOCAR（JCM）</button>
+              <button type="button" id="ssLink${ps.id}_ittou" class="seg-btn ${link==='ittou'?'active':''}" onclick="setPkgSsLink(${ps.id},'ittou')">一等書記官（DIC）</button>
+            </div>
+          </div>`;
+        }
         html += `<div style="margin-bottom:4px">
           <label class="media-item" style="width:auto;display:inline-flex">
             <input type="checkbox" ${chkd} onchange="setPkgStoreAddon(${ps.id},'${s.key}',this.checked)">
             ${s.name}を追加
             <span class="media-monthly" style="margin-left:6px">月額¥${mon.toLocaleString()}</span>
           </label>
+          ${linkSub}
         </div>`;
       }
     });
@@ -1211,6 +1233,20 @@ function setPkgStoreAddon(id, sysKey, val) {
   ps[`addon_${sysKey}`] = val;
   const optEl = document.getElementById(`pkgAddCoreOpt_${id}`);
   if (optEl && sysKey === 'core') optEl.style.display = val ? '' : 'none';
+  const ssLinkEl = document.getElementById(`pkgAddSsLink_${id}`);
+  if (ssLinkEl && sysKey === 'smart_sign_sell') ssLinkEl.style.display = val ? '' : 'none';
+  calc();
+}
+
+// 販売スマートサインの連携先切り替え（JOCAR=JCM / 一等書記官=DIC）※パッケージ・単品共通
+function setPkgSsLink(id, val) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  ps.ss_sell_link = (val === 'ittou') ? 'ittou' : 'jocar';
+  const jb = document.getElementById(`ssLink${id}_jocar`);
+  const ib = document.getElementById(`ssLink${id}_ittou`);
+  if (jb) jb.classList.toggle('active', ps.ss_sell_link === 'jocar');
+  if (ib) ib.classList.toggle('active', ps.ss_sell_link === 'ittou');
   calc();
 }
 
@@ -1286,6 +1322,16 @@ function buildCustomStoreBody(ps) {
             onchange="setPkgCustomMedia(${ps.id},'${m.key}',this.checked)">
           ${m.name}<span class="media-monthly">¥${m.monthly.toLocaleString()}/月</span>
         </label>`).join('')}</div>`;
+    }
+    if (s.key === 'smart_sign_sell') {
+      const link = ps.ss_sell_link || 'jocar';
+      subHtml += `<div class="sys-sub-row" style="align-items:center">
+        <span>連携先</span>
+        <div class="seg-wrap seg-sm">
+          <button type="button" id="ssLink${ps.id}_jocar" class="seg-btn ${link==='jocar'?'active':''}" onclick="setPkgSsLink(${ps.id},'jocar')">JOCAR（JCM）</button>
+          <button type="button" id="ssLink${ps.id}_ittou" class="seg-btn ${link==='ittou'?'active':''}" onclick="setPkgSsLink(${ps.id},'ittou')">一等書記官（DIC）</button>
+        </div>
+      </div>`;
     }
 
     const onChangeAttr = s.isMedia
@@ -1887,7 +1933,12 @@ function updateNoteBoxPreview() {
   if (isPkg && pkgAnyInsmartCustom() && !pkgAnyInsmartNew()) lines.push('インスマートシステムは既存契約のため、法人基本料はかかりません。');
   if (isPkg && pkgAnyCoreExisting())                         lines.push('coreシステムは既存契約のため、基本利用料はかからず、ID追加分のみ課金となります。');
   if (hasSSBuyOrCore) lines.push('SMS送信には1件につき70文字以内25円、70文字の25円に加え、70文字以降の66文字ごとに25円かかります。');
-  if (hasSSSell)      lines.push('販売スマートサインは JOCARまたは一等書記官の連携が必須。別途 JCM社またはDIC社へのオプション申込が必要です。');
+  if (isPkg) {
+    if (pkgAnySsSellJocar()) lines.push('販売スマートサインは JOCAR連携が必須。別途 JCM社へのオプション申込が必要です。');
+    if (pkgAnySsSellIttou()) lines.push('販売スマートサインは 一等書記官の連携が必須。別途 DIC社への連動申込が必要です。');
+  } else if (hasSSSell) {
+    lines.push('販売スマートサインは JOCAR連携が必須。別途 JCM社へのオプション申込が必要です。');
+  }
   if (hasStorPerf)    lines.push('ストアパフォーマンスは JOCARとの連携が必須。別途 JCM社のご契約が必要です。');
   if (hasMedia)       lines.push('媒体連携はすべて各媒体との個別契約が必要です。');
   lines.push('※契約期間は利用開始日の属する月の末日の1年後となり、その後も1年間の自動更新となります。');
@@ -1908,7 +1959,7 @@ function calcPackage() {
   );
   if (activePkgStores.length === 0) {
     document.getElementById('qTotal').textContent = '¥ −';
-    document.getElementById('qBody').innerHTML = '<div class="empty-msg">パッケージを選択するかカスタムシステムを設定してください</div>';
+    document.getElementById('qBody').innerHTML = '<div class="empty-msg">パッケージを選択するか単品システムを設定してください</div>';
     return;
   }
 
@@ -2336,7 +2387,7 @@ function renderQuotePkg(iL, ti, tm, storeSections) {
         monthHtml += ss.mL.map(lineHtml).join('');
       } else if (ss.type === 'custom') {
         monthHtml += `<div class="q-store-label">🔧 ${ss.name}
-          <span style="color:#7c3aed;font-size:10px;font-weight:600;margin-left:4px">カスタム</span>
+          <span style="color:#7c3aed;font-size:10px;font-weight:600;margin-left:4px">単品</span>
           <span style="font-weight:400;color:#9ca3af;font-size:10px">（${fmt(ss.sm)}/月）</span>
         </div>`;
         monthHtml += ss.mL.map(lineHtml).join('');
@@ -2419,7 +2470,12 @@ function buildNotesText() {
   if (isPkg && pkgAnyInsmartCustom() && !pkgAnyInsmartNew()) lines.push('インスマートシステムは既存契約のため、法人基本料はかかりません。');
   if (isPkg && pkgAnyCoreExisting())                         lines.push('coreシステムは既存契約のため、基本利用料はかからず、ID追加分のみ課金となります。');
   if (hasSSBuyOrCore) lines.push('SMS送信には1件につき70文字以内25円、70文字の25円に加え、70文字以降の66文字ごとに25円かかります。');
-  if (hasSSSell)      lines.push('販売スマートサインは JOCARまたは一等書記官の連携が必須となり、別途 JCM社またはDIC社へのオプション申込が必要となります。');
+  if (isPkg) {
+    if (pkgAnySsSellJocar()) lines.push('販売スマートサインは JOCAR連携が必須となり、別途 JCM社へのオプション申込が必要となります。');
+    if (pkgAnySsSellIttou()) lines.push('販売スマートサインは 一等書記官の連携が必須となり、別途 DIC社への連動申込が必要となります。');
+  } else if (hasSSSell) {
+    lines.push('販売スマートサインは JOCAR連携が必須となり、別途 JCM社へのオプション申込が必要となります。');
+  }
   if (hasStorPerf)    lines.push('ストアパフォーマンス（業績管理システム）は JOCARとの連携が必須です。別途 JCM社のご契約が必要となります。');
   if (hasMedia)       lines.push('媒体連携はすべて各媒体との個別契約が必要です。');
   lines.push('※契約期間は利用開始日の属する月の末日の1年後となり、その後も1年間の自動更新となります。');
