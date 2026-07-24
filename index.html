@@ -380,11 +380,6 @@
   <h2>SaaSプロダクト &mdash; 料金シミュレーター</h2>
 </header>
 
-<div class="mode-bar">
-  <button class="mode-btn active" id="btnPkg"    onclick="setMode('pkg')">📦 パッケージ</button>
-  <button class="mode-btn"        id="btnSingle" onclick="setMode('single')">🔧 単品・店舗別カスタム</button>
-</div>
-
 <div class="layout">
   <div class="config-col">
 
@@ -713,15 +708,16 @@ function makePkgStore(num) {
     addon_store_perf: false,
     addon_e_answer: false,
     media: { cs:false, goo:false, as:false, onet:false },
-    // ── Custom fields ──
+    // ── Custom fields（＝単品）──
     c_e_answer: false,
-    c_insmart: true, c_insmart_ids: 3,
+    c_insmart: true, c_insmart_ids: 3, c_insmart_cust: 'new',
     c_account_ids: 1,
-    c_core: false, c_core_ids: 2, c_core_type: 'media',
+    c_core: false, c_core_ids: 2, c_core_type: 'media', c_core_cust: 'new',
     c_smart_sign_buy: false,
     c_smart_sign_sell: false,
     c_e_kessai: false,
     c_store_perf: false,
+    c_media_on: false,   // 媒体連携の親チェック（初期OFF）
     c_media: { cs:false, goo:false, as:false, onet:false }
   };
 }
@@ -763,6 +759,10 @@ function custNoteText(key, val) {
   if (key === 'insmart') return val === 'existing' ? '1ID目から課金・法人基本料なし' : '1ID目無料・法人基本料あり';
   return val === 'existing' ? '基本利用料なし（ID追加のみ）' : '基本利用料あり';
 }
+// パッケージ画面のカスタム（単品）店舗に対する顧客区分の判定（備考欄の注記用）
+function pkgAnyInsmartCustom()   { return pkgStores.some(ps => ps.type==='custom' && ps.c_insmart); }
+function pkgAnyInsmartNew()      { return pkgStores.some(ps => ps.type==='custom' && ps.c_insmart && ps.c_insmart_cust !== 'existing'); }
+function pkgAnyCoreExisting()    { return pkgStores.some(ps => ps.type==='custom' && ps.c_core && ps.c_core_cust === 'existing'); }
 
 // ══════════════════════════════════════════
 //  CONFIG
@@ -888,11 +888,17 @@ window.onload = () => {
 };
 
 function setMode(m) {
+  // タブUIは廃止。パッケージ画面に一本化されているため mode は常に 'pkg'。
+  // （modeSingle は DOM 上に隠しておき renderStores() の初期化参照を保つ）
   mode = m;
-  document.getElementById('modePkg').style.display    = m==='pkg'    ? '' : 'none';
-  document.getElementById('modeSingle').style.display = m==='single' ? '' : 'none';
-  document.getElementById('btnPkg').classList.toggle('active', m==='pkg');
-  document.getElementById('btnSingle').classList.toggle('active', m==='single');
+  const pkgEl = document.getElementById('modePkg');
+  const singleEl = document.getElementById('modeSingle');
+  if (pkgEl)    pkgEl.style.display    = m==='pkg'    ? '' : 'none';
+  if (singleEl) singleEl.style.display = m==='single' ? '' : 'none';
+  const btnPkg = document.getElementById('btnPkg');
+  const btnSingle = document.getElementById('btnSingle');
+  if (btnPkg)    btnPkg.classList.toggle('active', m==='pkg');
+  if (btnSingle) btnSingle.classList.toggle('active', m==='single');
   calc();
 }
 
@@ -955,7 +961,7 @@ function renderPkgStoreCard(ps, idx) {
                border:2px solid ${ps.type==='custom'?'#7c3aed':'#e0e6ef'};
                background:${ps.type==='custom'?'#f5f3ff':'white'};
                color:${ps.type==='custom'?'#5b21b6':'#6b7280'}">
-        🔧 カスタム
+        🔧 単品
       </button>
     </div>`;
 
@@ -1213,19 +1219,44 @@ function hasCustomSys(ps) {
   return ps.c_e_answer || ps.c_insmart || ps.c_core ||
          ps.c_smart_sign_buy || ps.c_smart_sign_sell ||
          ps.c_e_kessai || ps.c_store_perf ||
-         Object.values(ps.c_media).some(v => v);
+         (ps.c_media_on && Object.values(ps.c_media).some(v => v));
 }
 
 function buildCustomStoreBody(ps) {
   let html = '<div>';
+  // アカウント数（全システム共通）：先頭に表示
+  html += `<div class="field-row" style="margin-bottom:10px;padding:8px 12px;background:#f8fafc;border-radius:6px;border:1px solid #e5e7eb">
+    <div class="field-label">👤 アカウント数（全システム共通）
+      <div class="field-sub">1IDにつき初期¥5,000/ID（無料枠なし）</div>
+    </div>
+    <div class="num-ctrl-sm">
+      <button onclick="adjPkgCustom(${ps.id},'c_account_ids',-1)">−</button>
+      <input type="number" value="${ps.c_account_ids}" min="0" max="99"
+        oninput="setPkgCustomField(${ps.id},'c_account_ids',+this.value)">
+      <button onclick="adjPkgCustom(${ps.id},'c_account_ids',1)">＋</button>
+    </div>
+  </div>`;
   SYS.forEach(s => {
     const ck = 'c_' + s.key;
-    const ckVal = s.isMedia ? Object.values(ps.c_media).some(v => v) : ps[ck];
+    const ckVal = s.isMedia ? !!ps.c_media_on : ps[ck];
     const checked = ckVal ? 'checked' : '';
     const isOpen = ckVal ? 'open' : '';
     let subHtml = '';
 
     if (s.hasIDs && !s.isMedia) {
+      // 顧客区分（新規／既存）― 単品と同じルール
+      const custKey = s.key === 'insmart' ? 'c_insmart_cust' : 'c_core_cust';
+      const custVal = ps[custKey];
+      subHtml += `<div class="sys-sub-row" style="align-items:center">
+        <span>顧客区分</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div class="seg-wrap seg-sm">
+            <button type="button" id="pkgCust${ps.id}_${s.key}_new" class="seg-btn ${custVal==='new'?'active':''}" onclick="setPkgCustomCust(${ps.id},'${s.key}','new')">新規</button>
+            <button type="button" id="pkgCust${ps.id}_${s.key}_existing" class="seg-btn ${custVal==='existing'?'active':''}" onclick="setPkgCustomCust(${ps.id},'${s.key}','existing')">既存</button>
+          </div>
+          <span style="font-size:10px;color:#9ca3af" id="pkgCustNote${ps.id}_${s.key}">${pkgCustNoteText(s.key, custVal)}</span>
+        </div>
+      </div>`;
       const idKey = s.key === 'insmart' ? 'c_insmart_ids' : 'c_core_ids';
       const idVal = ps[idKey];
       subHtml += `<div class="sys-sub-row">
@@ -1257,9 +1288,12 @@ function buildCustomStoreBody(ps) {
         </label>`).join('')}</div>`;
     }
 
+    const onChangeAttr = s.isMedia
+      ? `togglePkgCustomMedia(${ps.id},this.checked)`
+      : `setPkgCustomSys(${ps.id},'${s.key}',this.checked)`;
     html += `<div class="sys-row">
       <input type="checkbox" ${checked}
-        onchange="setPkgCustomSys(${ps.id},'${s.key}',this.checked)">
+        onchange="${onChangeAttr}">
       <div class="sys-info">
         <div class="sys-name">${s.name}</div>
         <div class="sys-hint">${s.hint}</div>
@@ -1267,18 +1301,6 @@ function buildCustomStoreBody(ps) {
       </div>
     </div>`;
   });
-  // アカウント数（全システム共通）：常時表示
-  html += `<div class="field-row" style="margin-top:8px;padding:8px 12px;background:#f8fafc;border-radius:6px;border:1px solid #e5e7eb">
-    <div class="field-label">👤 アカウント数（全システム共通）
-      <div class="field-sub">5IDまで無料。6ID目以降は初期¥5,000/ID</div>
-    </div>
-    <div class="num-ctrl-sm">
-      <button onclick="adjPkgCustom(${ps.id},'c_account_ids',-1)">−</button>
-      <input type="number" value="${ps.c_account_ids}" min="0" max="99"
-        oninput="setPkgCustomField(${ps.id},'c_account_ids',+this.value)">
-      <button onclick="adjPkgCustom(${ps.id},'c_account_ids',1)">＋</button>
-    </div>
-  </div>`;
   html += '</div>';
   return html;
 }
@@ -1327,6 +1349,39 @@ function setPkgCustomMedia(id, mediaKey, val) {
   if (!ps) return;
   ps.c_media[mediaKey] = val;
   calc();
+}
+
+// カスタム（単品）媒体連携の親チェック切替（初期OFF）
+function togglePkgCustomMedia(id, on) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  ps.c_media_on = on;
+  const sub = document.getElementById(`pkgCSub${id}_media`);
+  if (sub) sub.classList.toggle('open', on);
+  calc();
+}
+
+// カスタム（単品）店舗の顧客区分（新規／既存）切替 ― key: 'insmart' | 'core'
+function setPkgCustomCust(id, key, type) {
+  const ps = pkgStores.find(s => s.id === id);
+  if (!ps) return;
+  const val = (type === 'existing') ? 'existing' : 'new';
+  ps['c_' + key + '_cust'] = val;
+  const nb = document.getElementById(`pkgCust${id}_${key}_new`);
+  const eb = document.getElementById(`pkgCust${id}_${key}_existing`);
+  if (nb) nb.classList.toggle('active', val === 'new');
+  if (eb) eb.classList.toggle('active', val === 'existing');
+  const note = document.getElementById(`pkgCustNote${id}_${key}`);
+  if (note) note.textContent = pkgCustNoteText(key, val);
+  calc();
+}
+
+// カスタム（単品）店舗：顧客区分ボタンの補足テキスト
+// ※アカウント発行費用は店舗単位で5IDまで無料（パッケージと共通）のため、
+//   ここでの新規／既存は「インスマ法人基本料」「core基本利用料」の有無にのみ影響する。
+function pkgCustNoteText(key, val) {
+  if (key === 'insmart') return val === 'existing' ? '法人基本料なし' : '法人基本料あり';
+  return val === 'existing' ? '基本利用料なし（ID追加のみ）' : '基本利用料あり';
 }
 
 // ══════════════════════════════════════════
@@ -1816,7 +1871,11 @@ function updateNoteBoxPreview() {
   const hasCoreNm    = allNames.includes('coreシステム');
   const lines = [];
   if (isPkg) {
-    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000（パッケージはインスマート5IDまで無料、6ID目以降 ¥5,000/ID）。');
+    const hasPkgType    = q.storeSections.some(ss => ss.type==='pkg');
+    const hasCustomType = q.storeSections.some(ss => ss.type==='custom');
+    if (hasPkgType)    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000（パッケージはインスマート5IDまで無料、6ID目以降 ¥5,000/ID）。');
+    if (hasCustomType) lines.push('単品店舗のアカウント発行費用は1IDにつき ¥5,000（無料枠なし）。');
+    if (!hasPkgType && !hasCustomType) lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000。');
   } else if (anyInsmartNew()) {
     lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000（新規顧客はインスマート利用時のみ1ID目無料）。');
   } else {
@@ -1824,8 +1883,11 @@ function updateNoteBoxPreview() {
   }
   if (!isPkg && hasInsmartNm && !anyInsmartNew()) lines.push('インスマートシステムは既存契約のため、法人基本料はかかりません。');
   if (!isPkg && hasCoreNm    && anyCoreExisting()) lines.push('coreシステムは既存契約のため、基本利用料はかからず、ID追加分のみ課金となります。');
+  // パッケージ画面のカスタム（単品）店舗で既存契約が含まれる場合
+  if (isPkg && pkgAnyInsmartCustom() && !pkgAnyInsmartNew()) lines.push('インスマートシステムは既存契約のため、法人基本料はかかりません。');
+  if (isPkg && pkgAnyCoreExisting())                         lines.push('coreシステムは既存契約のため、基本利用料はかからず、ID追加分のみ課金となります。');
   if (hasSSBuyOrCore) lines.push('SMS送信には1件につき70文字以内25円、70文字の25円に加え、70文字以降の66文字ごとに25円かかります。');
-  if (hasSSSell)      lines.push('販売スマートサインは JOCAR連携が必須。別途 JCM社へのオプション申込が必要です。');
+  if (hasSSSell)      lines.push('販売スマートサインは JOCARまたは一等書記官の連携が必須。別途 JCM社またはDIC社へのオプション申込が必要です。');
   if (hasStorPerf)    lines.push('ストアパフォーマンスは JOCARとの連携が必須。別途 JCM社のご契約が必要です。');
   if (hasMedia)       lines.push('媒体連携はすべて各媒体との個別契約が必要です。');
   lines.push('※契約期間は利用開始日の属する月の末日の1年後となり、その後も1年間の自動更新となります。');
@@ -1855,7 +1917,7 @@ function calcPackage() {
   const storeSections = [];
 
   // Law-level trackers for custom stores
-  let cAnyInsmart=false, cAnySSBuy=false, cAnySSSell=false, cAnyEKessai=false, cAnyStorPerf=false;
+  let cAnyInsmart=false, cAnyInsmartNew=false, cAnySSBuy=false, cAnySSSell=false, cAnyEKessai=false, cAnyStorPerf=false;
 
   pkgStores.forEach(ps => {
     if (ps.type === 'pkg') {
@@ -1887,9 +1949,11 @@ function calcPackage() {
 
       SYS.filter(s => !pkg.inc[s.key] && s.key !== 'insmart').forEach(s => {
         if (s.isMedia) {
-          MEDIA_LIST.forEach(m => {
-            if (ps.media[m.key]) { sml.push({ n:m.name, a: m.monthly }); sm += m.monthly; }
-          });
+          const selM = MEDIA_LIST.filter(m => ps.media[m.key]);
+          if (selM.length > 0) {
+            const mSum = selM.reduce((s,m)=>s+m.monthly, 0);
+            sml.push({ n:`媒体連携（${selM.map(m=>m.name).join('、')}）`, a: mSum }); sm += mSum;
+          }
         } else if (s.key === 'core') {
           if (ps.addon_core) {
             const ci = ps.addon_core_type === 'media'
@@ -1940,6 +2004,7 @@ function calcPackage() {
       }
       if (ps.c_insmart) {
         cAnyInsmart = true;
+        if (ps.c_insmart_cust !== 'existing') cAnyInsmartNew = true;  // 新規なら法人基本料あり
         const mID = CFG.insmart_id_monthly * ps.c_insmart_ids;
         sml.push({ n:`${CFG.insmart_name} ${ps.c_insmart_ids}ID × ¥${CFG.insmart_id_monthly.toLocaleString()}`, a:mID }); sm += mID;
       }
@@ -1947,25 +2012,31 @@ function calcPackage() {
         const ci = ps.c_core_type === 'media'
           ? { n: CFG.core_media_name, init: CFG.core_media_init, mon: CFG.core_media_monthly }
           : { n: CFG.core_nomedia_name, init: CFG.core_nomedia_init, mon: CFG.core_nomedia_monthly };
-        siL.push({ n:`${ci.n} 初期`, a:ci.init });
-        sml.push({ n:ci.n, a:ci.mon }); sm += ci.mon;
+        if (ps.c_core_cust === 'existing') {
+          // 既存顧客：基本利用料（初期・月額）はかからず、ID追加分のみ課金
+          sml.push({ n:`${ci.n} 基本（既存・無料）`, a:0, free:true });
+        } else {
+          siL.push({ n:`${ci.n} 初期`, a:ci.init });
+          sml.push({ n:ci.n, a:ci.mon }); sm += ci.mon;
+        }
         sml.push({ n:`coreシステム ID × ${ps.c_core_ids}ID`, a: CFG.core_id_monthly * ps.c_core_ids }); sm += CFG.core_id_monthly * ps.c_core_ids;
       }
       if (ps.c_smart_sign_buy)  { cAnySSBuy=true;   sml.push({ n: CFG.ss_buy_name, a: CFG.ss_buy_monthly }); sm+= CFG.ss_buy_monthly; }
       if (ps.c_smart_sign_sell) { cAnySSSell=true;  sml.push({ n: CFG.ss_sell_name, a: CFG.ss_sell_monthly }); sm+= CFG.ss_sell_monthly; }
       if (ps.c_e_kessai)        { cAnyEKessai=true; sml.push({ n: CFG.e_kessai_name, a: CFG.e_kessai_monthly }); sm+= CFG.e_kessai_monthly; }
       if (ps.c_store_perf)      { cAnyStorPerf=true;sml.push({ n: CFG.store_perf_name, a: CFG.store_perf_monthly }); sm+= CFG.store_perf_monthly; }
-      MEDIA_LIST.forEach(m => {
-        if (ps.c_media[m.key]) { sml.push({ n:m.name, a:m.monthly }); sm += m.monthly; }
-      });
+      if (ps.c_media_on) {
+        const selM = MEDIA_LIST.filter(m => ps.c_media[m.key]);
+        if (selM.length > 0) {
+          const mSum = selM.reduce((s,m)=>s+m.monthly, 0);
+          sml.push({ n:`媒体連携（${selM.map(m=>m.name).join('、')}）`, a: mSum }); sm += mSum;
+        }
+      }
 
-      // アカウント発行費用（カスタム店舗：全システム共通アカウント数で計算、CFG.account_pkg_free_idsまで無料）
+      // アカウント発行費用（単品：無料枠なし・全ID課金）
       const accIds = ps.c_account_ids;
-      const accExtra = Math.max(0, accIds - CFG.account_pkg_free_ids);
-      if (accExtra > 0) {
-        siL.push({ n:`アカウント発行費用 × ${accExtra}ID（${CFG.account_pkg_free_ids + 1}ID目以降）`, a: accExtra * CFG.account_init_per_id });
-      } else {
-        siL.push({ n:`アカウント発行費用（${accIds}ID・${CFG.account_pkg_free_ids}IDまで無料）`, a:0, free:true });
+      if (accIds > 0) {
+        siL.push({ n:`アカウント発行費用 × ${accIds}ID`, a: accIds * CFG.account_init_per_id });
       }
 
       // Per-store init fees go into main iL with store name prefix（mult倍）
@@ -1984,7 +2055,13 @@ function calcPackage() {
   const lawML = [], lawIL = [];
   let lm = 0;
   if (cAnyInsmart) {
-    lawML.push({ n: CFG.insmart_name + ' 基本（法人）', a: CFG.insmart_law_monthly }); lm += CFG.insmart_law_monthly;
+    if (cAnyInsmartNew) {
+      // いずれかの店舗が新規：法人基本料あり
+      lawML.push({ n: CFG.insmart_name + ' 基本（法人）', a: CFG.insmart_law_monthly }); lm += CFG.insmart_law_monthly;
+    } else {
+      // 全店舗が既存：法人基本料はかからない
+      lawML.push({ n: CFG.insmart_name + ' 基本（法人・既存・無料）', a: 0, free:true });
+    }
   }
   if (cAnySSBuy)    lawIL.push({ n: CFG.ss_buy_name + ' 初期（法人）',      a: CFG.ss_buy_law_init });
   if (cAnySSSell)   lawIL.push({ n: CFG.ss_sell_name + ' 初期（法人）',      a: CFG.ss_sell_law_init });
@@ -1993,7 +2070,7 @@ function calcPackage() {
   lawIL.forEach(l => { iL.push(l); if (!l.free) ti += l.a; });
   tm += lm;
   if (lawML.length > 0 || lawIL.length > 0) {
-    storeSections.push({ name:'法人共通（カスタム分）', type:'law', mL: lawML, sm: lm });
+    storeSections.push({ name:'法人共通（単品分）', type:'law', mL: lawML, sm: lm });
   }
 
   // オプション加算
@@ -2057,9 +2134,11 @@ function calcSingle() {
     if (st.e_kessai)        { anyEKessai=true; mL.push({ n: CFG.e_kessai_name, a: CFG.e_kessai_monthly }); sm+= CFG.e_kessai_monthly; }
     if (st.store_perf)      { anyStorPerf=true;mL.push({ n: CFG.store_perf_name, a: CFG.store_perf_monthly }); sm+= CFG.store_perf_monthly; }
     if (st.media_on && st.media) {
-      MEDIA_LIST.forEach(m => {
-        if (st.media[m.key]) { mL.push({ n:m.name, a:m.monthly }); sm+=m.monthly; }
-      });
+      const selM = MEDIA_LIST.filter(m => st.media[m.key]);
+      if (selM.length > 0) {
+        const mSum = selM.reduce((s,m)=>s+m.monthly, 0);
+        mL.push({ n:`媒体連携（${selM.map(m=>m.name).join('、')}）`, a: mSum }); sm += mSum;
+      }
     }
 
     // mult倍にして合計に加算
@@ -2324,7 +2403,11 @@ function buildNotesText() {
   const hasCoreNm    = allNames.includes('coreシステム');
   const lines = [];
   if (isPkg) {
-    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000 がかかります（パッケージはインスマートシステム5IDまで無料、6ID目以降は ¥5,000/ID）。');
+    const hasPkgType    = q.storeSections.some(ss => ss.type==='pkg');
+    const hasCustomType = q.storeSections.some(ss => ss.type==='custom');
+    if (hasPkgType)    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000 がかかります（パッケージはインスマートシステム5IDまで無料、6ID目以降は ¥5,000/ID）。');
+    if (hasCustomType) lines.push('単品店舗のアカウント発行費用は1IDにつき ¥5,000 がかかります（無料枠なし）。');
+    if (!hasPkgType && !hasCustomType) lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000 がかかります。');
   } else if (anyInsmartNew()) {
     lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000 がかかります（新規顧客はインスマートシステム利用時のみ1ID目無料）。');
   } else {
@@ -2332,8 +2415,11 @@ function buildNotesText() {
   }
   if (!isPkg && hasInsmartNm && !anyInsmartNew()) lines.push('インスマートシステムは既存契約のため、法人基本料はかかりません。');
   if (!isPkg && hasCoreNm    && anyCoreExisting()) lines.push('coreシステムは既存契約のため、基本利用料はかからず、ID追加分のみ課金となります。');
+  // パッケージ画面のカスタム（単品）店舗で既存契約が含まれる場合
+  if (isPkg && pkgAnyInsmartCustom() && !pkgAnyInsmartNew()) lines.push('インスマートシステムは既存契約のため、法人基本料はかかりません。');
+  if (isPkg && pkgAnyCoreExisting())                         lines.push('coreシステムは既存契約のため、基本利用料はかからず、ID追加分のみ課金となります。');
   if (hasSSBuyOrCore) lines.push('SMS送信には1件につき70文字以内25円、70文字の25円に加え、70文字以降の66文字ごとに25円かかります。');
-  if (hasSSSell)      lines.push('販売スマートサインは JOCAR連携が必須となり、別途 JCM社へのオプション申込が必要となります。');
+  if (hasSSSell)      lines.push('販売スマートサインは JOCARまたは一等書記官の連携が必須となり、別途 JCM社またはDIC社へのオプション申込が必要となります。');
   if (hasStorPerf)    lines.push('ストアパフォーマンス（業績管理システム）は JOCARとの連携が必須です。別途 JCM社のご契約が必要となります。');
   if (hasMedia)       lines.push('媒体連携はすべて各媒体との個別契約が必要です。');
   lines.push('※契約期間は利用開始日の属する月の末日の1年後となり、その後も1年間の自動更新となります。');
@@ -2489,7 +2575,7 @@ function openQuoteWindow(company, person, dateStr, notesText) {
           const incList = Object.entries(pkg.inc).filter(([,v])=>v).map(([k])=>PKG_LABELS[k]);
           return `${ss.name}：${ss.pkg}パッケージ（${incList.join('・')}）`;
         } else {
-          return `${ss.name}：カスタム`;
+          return `${ss.name}：単品`;
         }
       });
     subSystems = storeDescs.join('　/　');
@@ -2584,7 +2670,9 @@ tfoot tr.sub td{font-weight:700;text-align:right;background:#dce9f4;font-size:12
 @media print{
   .no-print{display:none}
   body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .page{padding:10mm 13mm}
+  /* 画面表示では A4 全面を見せるため min-height:297mm を使うが、
+     印刷時は内容が1ページに収まる場合に空白の2ページ目が出ないよう解除する */
+  .page{padding:10mm 13mm;min-height:auto;margin:0}
 }
 </style>
 </head>
@@ -2697,7 +2785,8 @@ async function downloadPdf() {
     const imgW = A4_W;
     const imgH = (canvas.height / canvas.width) * A4_W;
     let pdf;
-    if (imgH <= A4_H) {
+    // 端数で 297mm をわずかに超えても、ほぼ1ページ分なら空白ページを作らず1ページに収める
+    if (imgH <= A4_H + 2) {
       pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, imgW, imgH);
     } else {
