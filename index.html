@@ -1970,6 +1970,9 @@ function calcPackage() {
   // Law-level trackers for custom stores
   let cAnyInsmart=false, cAnyInsmartNew=false, cAnySSBuy=false, cAnySSSell=false, cAnyEKessai=false, cAnyStorPerf=false;
 
+  // インスマートシステム新規契約時は法人で1ID目のアカウント発行費用が無料（単品店舗のみ・法人で1回）
+  let insmartFreeIdBudget = pkgAnyInsmartNew() ? 1 : 0;
+
   pkgStores.forEach(ps => {
     if (ps.type === 'pkg') {
       // ───────────────────── PACKAGE TYPE ─────────────────────
@@ -2084,27 +2087,30 @@ function calcPackage() {
         }
       }
 
-      // アカウント発行費用（単品：無料枠なし・全ID課金）
-      const accIds = ps.c_account_ids;
-      if (accIds > 0) {
-        siL.push({ n:`アカウント発行費用 × ${accIds}ID`, a: accIds * CFG.account_init_per_id });
-      }
-
       // Per-store init fees go into main iL with store name prefix（mult倍）
-      // mult>1 のときは「単価 × N店舗 = 合計」でPDF表示されるよう名称に倍率を持たせる
+      // mult>1 のときは「単価 × N店舗 = 合計」でPDF表示されるよう名称に「× N店舗」を付与
       siL.forEach(l => {
         if (l.free) { iL.push({ ...l, n:`${ps.name}：${l.n}`, a:0 }); return; }
-        let name = l.n, a = l.a;
-        if (mult > 1) {
-          a = l.a * mult;
-          const idM = l.n.match(/^(.+?) × (\d+)ID$/);   // アカウント発行費用など「× NID」を含む行
-          name = idM
-            ? `${idM[1]} × ${parseInt(idM[2]) * mult}ID`  // 総ID数（ID数 × 店舗数）で表示
-            : `${l.n} × ${mult}店舗`;                     // フラットな初期費用は「× N店舗」を付与
-        }
+        const a = mult > 1 ? l.a * mult : l.a;
+        const name = mult > 1 ? `${l.n} × ${mult}店舗` : l.n;
         iL.push({ ...l, n:`${ps.name}：${name}`, a });
         ti += a;
       });
+
+      // アカウント発行費用（単品）：インスマート新規なら法人で1ID目無料（それ以外は全ID課金）
+      const accIdsTotal = (ps.c_account_ids || 0) * mult;   // 店舗数（×N店舗）も加味した総ID数
+      if (accIdsTotal > 0) {
+        const freeHere = Math.min(insmartFreeIdBudget, accIdsTotal);
+        insmartFreeIdBudget -= freeHere;
+        const chargeIds = accIdsTotal - freeHere;
+        const freeNote = freeHere > 0 ? '（インスマート新規1ID目無料）' : '';
+        if (chargeIds > 0) {
+          const a = chargeIds * CFG.account_init_per_id;
+          iL.push({ n:`${ps.name}：アカウント発行費用 × ${chargeIds}ID${freeNote}`, a }); ti += a;
+        } else {
+          iL.push({ n:`${ps.name}：アカウント発行費用（${accIdsTotal}ID・インスマート新規1ID目無料）`, a:0, free:true });
+        }
+      }
       tm += sm * mult;
       storeSections.push({ name: mult > 1 ? `${ps.name}（×${mult}店舗）` : ps.name,
         type:'custom', mL: sml, sm, mult });
@@ -2466,7 +2472,9 @@ function buildNotesText() {
     const hasPkgType    = q.storeSections.some(ss => ss.type==='pkg');
     const hasCustomType = q.storeSections.some(ss => ss.type==='custom');
     if (hasPkgType)    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000 がかかります（パッケージはインスマートシステム5IDまで無料、6ID目以降は ¥5,000/ID）。');
-    if (hasCustomType) lines.push('単品店舗のアカウント発行費用は1IDにつき ¥5,000 がかかります（無料枠なし）。');
+    if (hasCustomType) lines.push(pkgAnyInsmartNew()
+      ? '単品店舗のアカウント発行費用は1IDにつき ¥5,000 がかかります（インスマートシステム新規契約のため1ID目無料）。'
+      : '単品店舗のアカウント発行費用は1IDにつき ¥5,000 がかかります（無料枠なし）。');
     if (!hasPkgType && !hasCustomType) lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000 がかかります。');
   } else if (anyInsmartNew()) {
     lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000 がかかります（新規顧客はインスマートシステム利用時のみ1ID目無料）。');
