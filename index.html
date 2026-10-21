@@ -633,7 +633,7 @@ function buildPackages() {
 let PACKAGES = buildPackages();
 
 const PKG_LABELS = {
-  e_answer:'e-アンサー', insmart:'インスマート', smart_sign_buy:'買取スマートサイン',
+  e_answer:'e-アンサー', insmart:'インスマートシステム', smart_sign_buy:'買取スマートサイン',
   smart_sign_sell:'販売スマートサイン', store_perf:'ストアパフォーマンス',
   media:'媒体連携', core:'coreシステム', e_kessai:'e-決済'
 };
@@ -1461,7 +1461,7 @@ function updateAccountPanel() {
   const hint = document.getElementById('accountFeeHint');
   if (!ctrl) return;
   ctrl.style.display = 'flex';
-  const freeNote = (hasInsmart && anyInsmartNew()) ? '・インスマート利用時1ID目無料' : '';
+  const freeNote = (hasInsmart && anyInsmartNew()) ? '・インスマートシステム利用時1ID目無料' : '';
   if (hint) hint.textContent = `システムを利用するユーザー数（アカウント発行費用 ¥5,000/ID${freeNote}）`;
 }
 
@@ -1919,11 +1919,11 @@ function updateNoteBoxPreview() {
   if (isPkg) {
     const hasPkgType    = q.storeSections.some(ss => ss.type==='pkg');
     const hasCustomType = q.storeSections.some(ss => ss.type==='custom');
-    if (hasPkgType)    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000（パッケージはインスマート5IDまで無料、6ID目以降 ¥5,000/ID）。');
+    if (hasPkgType)    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000（パッケージはインスマートシステム5IDまで無料、6ID目以降 ¥5,000/ID）。');
     if (hasCustomType) lines.push('単品店舗のアカウント発行費用は1IDにつき ¥5,000（無料枠なし）。');
     if (!hasPkgType && !hasCustomType) lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000。');
   } else if (anyInsmartNew()) {
-    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000（新規顧客はインスマート利用時のみ1ID目無料）。');
+    lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000（新規顧客はインスマートシステム利用時のみ1ID目無料）。');
   } else {
     lines.push('各システムのアカウント発行費用は1IDにつき ¥5,000。');
   }
@@ -2103,12 +2103,12 @@ function calcPackage() {
         const freeHere = Math.min(insmartFreeIdBudget, accIdsTotal);
         insmartFreeIdBudget -= freeHere;
         const chargeIds = accIdsTotal - freeHere;
-        const freeNote = freeHere > 0 ? '（インスマート新規1ID目無料）' : '';
+        const freeNote = freeHere > 0 ? '（インスマートシステム新規1ID目無料）' : '';
         if (chargeIds > 0) {
           const a = chargeIds * CFG.account_init_per_id;
           iL.push({ n:`${ps.name}：アカウント発行費用 × ${chargeIds}ID${freeNote}`, a }); ti += a;
         } else {
-          iL.push({ n:`${ps.name}：アカウント発行費用（${accIdsTotal}ID・インスマート新規1ID目無料）`, a:0, free:true });
+          iL.push({ n:`${ps.name}：アカウント発行費用（${accIdsTotal}ID・インスマートシステム新規1ID目無料）`, a:0, free:true });
         }
       }
       tm += sm * mult;
@@ -2701,7 +2701,7 @@ function openQuoteWindow(company, person, dateStr, notesText) {
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 @page{size:A4;margin:0}
-body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;font-size:11.5px;color:#000;background:#fff}
+body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;font-size:11.5px;color:#000;background:#fff;padding-top:52px}
 .page{width:210mm;min-height:297mm;padding:14mm 16mm;margin:0 auto}
 /* header */
 .hdr{display:flex;align-items:flex-start;justify-content:space-between}
@@ -2742,7 +2742,7 @@ tfoot tr.sub td{font-weight:700;text-align:right;background:#dce9f4;font-size:12
 .no-print{text-align:center;padding:22px;background:#f4f6f9;border-top:1px solid #dde}
 @media print{
   .no-print{display:none}
-  body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{-webkit-print-color-adjust:exact;print-color-adjust:exact;padding-top:0}
   /* 画面表示では A4 全面を見せるため min-height:297mm を使うが、
      印刷時は内容が1ページに収まる場合に空白の2ページ目が出ないよう解除する */
   .page{padding:10mm 13mm;min-height:auto;margin:0}
@@ -2820,20 +2820,18 @@ tfoot tr.sub td{font-weight:700;text-align:right;background:#dce9f4;font-size:12
 
 </div>
 
-<div class="no-print" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px 0">
-  <div style="display:flex;gap:12px">
-    <button onclick="window.print()"
-      style="padding:12px 28px;background:#2d6a9f;color:#fff;border:none;border-radius:8px;
-             font-size:14px;font-weight:700;cursor:pointer">
-      🖨&nbsp;印刷する
-    </button>
-    <button onclick="downloadPdf()"
-      style="padding:12px 28px;background:#059669;color:#fff;border:none;border-radius:8px;
-             font-size:14px;font-weight:700;cursor:pointer">
-      📥&nbsp;PDFを直接ダウンロード
-    </button>
-  </div>
-  <p id="pdfStatus" style="margin:0;font-size:12px;color:#6b7280"></p>
+<div class="no-print" style="position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;justify-content:center;align-items:center;gap:12px;padding:9px 12px;background:#eef2f7;border-bottom:1px solid #cfd8e3;box-shadow:0 2px 10px rgba(0,0,0,.15)">
+  <button onclick="window.print()"
+    style="padding:9px 24px;background:#2d6a9f;color:#fff;border:none;border-radius:8px;
+           font-size:13px;font-weight:700;cursor:pointer">
+    🖨&nbsp;印刷する
+  </button>
+  <button onclick="downloadPdf()"
+    style="padding:9px 24px;background:#059669;color:#fff;border:none;border-radius:8px;
+           font-size:13px;font-weight:700;cursor:pointer">
+    📥&nbsp;PDFを保存
+  </button>
+  <span id="pdfStatus" style="font-size:12px;color:#6b7280"></span>
 </div>
 <script>
 async function downloadPdf() {
